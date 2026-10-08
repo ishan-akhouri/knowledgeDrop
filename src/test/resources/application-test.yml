@@ -1,0 +1,10 @@
+# Used by tests via @ActiveProfiles("test"): in-memory H2 instead of PostgreSQL, fresh schema per run.
+spring:
+  datasource:
+    url: jdbc:h2:mem:knowledgedrop-test;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
