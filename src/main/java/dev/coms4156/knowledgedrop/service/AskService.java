@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service;
  * build until that decision is made.
  */
 @Service
-public class QaService {
+public class AskService {
 
   /**
    * Answers a question using only the caller's documents, with citations.

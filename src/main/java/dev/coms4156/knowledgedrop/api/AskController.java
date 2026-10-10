@@ -6,7 +6,7 @@ import dev.coms4156.knowledgedrop.api.dto.SimilarityRequest;
 import dev.coms4156.knowledgedrop.api.dto.SimilarityResponse;
 import dev.coms4156.knowledgedrop.model.ClientRecord;
 import dev.coms4156.knowledgedrop.security.AuthInterceptor;
-import dev.coms4156.knowledgedrop.service.QaService;
+import dev.coms4156.knowledgedrop.service.AskService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
@@ -17,16 +17,16 @@ import org.springframework.web.bind.annotation.RestController;
 /** Question answering and similarity endpoints. Both are TODO. */
 @RestController
 @RequestMapping("/knowledgeDrop")
-public class QaController {
+public class AskController {
 
-  private final QaService qaService;
+  private final AskService qaService;
 
   /**
    * Creates the controller.
    *
    * @param qaService question answering and similarity logic
    */
-  public QaController(QaService qaService) {
+  public AskController(AskService qaService) {
     this.qaService = qaService;
   }
 
