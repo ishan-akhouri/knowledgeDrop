@@ -2,7 +2,7 @@ package dev.coms4156.knowledgedrop.retrieval;
 
 import java.util.List;
 import java.util.UUID;
-import org.springframework.stereotype.Service;
+//import org.springframework.stereotype.Service;
 
 /**
  * The shared retrieval component: vector search, keyword search, and hybrid (RRF).
@@ -12,8 +12,10 @@ import org.springframework.stereotype.Service;
  *
  * <p>DEFERRED: vector and hybrid need an embedding provider. Keyword search does not, so it can be
  * built and tested first.
+ * 
+ * TODO(retrieval): add @Service once VectorStore, KeywordIndex, EmbeddingClient and an RrfMerger bean exist.
  */
-@Service
+//@Service
 public class RetrievalService {
 
   private final EmbeddingClient embeddings;
