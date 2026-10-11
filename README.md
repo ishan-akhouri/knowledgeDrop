@@ -124,7 +124,7 @@ All paths are under `/knowledgeDrop`.
 
 ## Local Development
 
-Requires JDK 17+ and Docker Desktop. No Maven install needed; use the wrapper.
+Requires JDK 17 (newer JDKs break PMD) and Docker Desktop. No Maven install needed; use the wrapper.
 
 ```bash
 docker compose up -d     # PostgreSQL, Redis Stack, Elasticsearch
