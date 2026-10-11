@@ -1,0 +1,61 @@
+# Local dev dependencies. Defaults match src/main/resources/application.yml.
+#   docker compose up -d      start everything
+#   docker compose down       stop (data is kept in the named volumes)
+#   docker compose down -v    stop and wipe all data
+services:
+  postgres:
+    image: postgres:16
+    container_name: kd-postgres
+    environment:
+      POSTGRES_DB: knowledgedrop
+      POSTGRES_USER: knowledgedrop
+      POSTGRES_PASSWORD: knowledgedrop
+    ports:
+      - "5432:5432"
+    volumes:
+      - kd-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U knowledgedrop -d knowledgedrop"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Stack includes the RediSearch module, which vector search requires.
+  # Plain "redis" will NOT work for vector KNN.
+  redis:
+    image: redis/redis-stack-server:latest
+    container_name: kd-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - kd-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # TODO: pin the image to the same major version as the Elasticsearch client Spring Boot pulls in
+  #   (check with: ./mvnw dependency:tree | grep elasticsearch). Single node, security off: local dev only.
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.1.0
+    container_name: kd-elasticsearch
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - kd-es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+volumes:
+  kd-postgres-data:
+  kd-redis-data:
+  kd-es-data:
+

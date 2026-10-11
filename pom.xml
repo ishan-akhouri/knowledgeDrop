@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>4.1.0</version>
+    <relativePath/> <!-- resolve parent from the repository -->
+  </parent>
+
+  <groupId>dev.coms4156</groupId>
+  <artifactId>knowledgedrop</artifactId>
+  <version>0.0.1-SNAPSHOT</version>
+  <name>knowledgedrop</name>
+  <description>KnowledgeDrop: a drop box API for building a searchable knowledge base.</description>
+
+  <properties>
+    <java.version>17</java.version>
+
+    <!-- Quality tooling versions -->
+    <jacoco.version>0.8.15</jacoco.version>
+    <maven-checkstyle.version>3.6.0</maven-checkstyle.version>
+    <checkstyle.version>12.3.1</checkstyle.version>
+    <maven-pmd.version>3.28.0</maven-pmd.version>
+
+    <!--
+      Quality gates. Checkstyle and PMD report violations without failing the build by default.
+      To enforce them (recommended once the team has a clean run), set:
+        quality.failOnViolation = true
+        quality.checkstyle.severity = warning
+      Raise jacoco.line.coverage.min (0.00 - 1.00) the same way.
+    -->
+    <quality.failOnViolation>false</quality.failOnViolation>
+    <quality.checkstyle.severity>error</quality.checkstyle.severity>
+    <jacoco.line.coverage.min>0.00</jacoco.line.coverage.min>
+  </properties>
+
+  <dependencies>
+    <!-- REST API -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-webmvc</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-validation</artifactId>
+    </dependency>
+
+    <!-- Service records (PostgreSQL): clients and documents (owner, name, type, time, status) -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+
+    <!-- Redis: chunk embeddings (vector search) -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-redis</artifactId>
+    </dependency>
+
+    <!-- Elasticsearch: keyword index (BM25) -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-elasticsearch</artifactId>
+    </dependency>
+
+    <!-- Testing: JUnit 5, Mockito, AssertJ, MockMvc -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-webmvc-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- In-memory database for tests only, so the test suite needs no running PostgreSQL -->
+    <dependency>
+      <groupId>com.h2database</groupId>
+      <artifactId>h2</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+
+      <!-- Test coverage: JaCoCo (report: target/site/jacoco/index.html) -->
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <version>${jacoco.version}</version>
+        <executions>
+          <execution>
+            <id>prepare-agent</id>
+            <goals>
+              <goal>prepare-agent</goal>
+            </goals>
+          </execution>
+          <execution>
+            <id>report</id>
+            <phase>test</phase>
+            <goals>
+              <goal>report</goal>
+            </goals>
+          </execution>
+          <execution>
+            <id>check</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <rule>
+                  <element>BUNDLE</element>
+                  <limits>
+                    <limit>
+                      <counter>LINE</counter>
+                      <value>COVEREDRATIO</value>
+                      <minimum>${jacoco.line.coverage.min}</minimum>
+                    </limit>
+                  </limits>
+                </rule>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Style checker: Checkstyle with the bundled Google Java Style ruleset -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-checkstyle-plugin</artifactId>
+        <version>${maven-checkstyle.version}</version>
+        <dependencies>
+          <dependency>
+            <groupId>com.puppycrawl.tools</groupId>
+            <artifactId>checkstyle</artifactId>
+            <version>${checkstyle.version}</version>
+          </dependency>
+        </dependencies>
+        <configuration>
+          <configLocation>google_checks.xml</configLocation>
+          <consoleOutput>true</consoleOutput>
+          <includeTestSourceDirectory>true</includeTestSourceDirectory>
+          <failOnViolation>${quality.failOnViolation}</failOnViolation>
+          <violationSeverity>${quality.checkstyle.severity}</violationSeverity>
+        </configuration>
+        <executions>
+          <execution>
+            <id>checkstyle</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Static analysis bug finder: PMD -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-pmd-plugin</artifactId>
+        <version>${maven-pmd.version}</version>
+        <configuration>
+          <printFailingErrors>true</printFailingErrors>
+          <failOnViolation>${quality.failOnViolation}</failOnViolation>
+        </configuration>
+        <executions>
+          <execution>
+            <id>pmd</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

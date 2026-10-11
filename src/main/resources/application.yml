@@ -1,0 +1,40 @@
+spring:
+  application:
+    name: knowledgedrop
+
+  # Service records (clients + documents) live in PostgreSQL.
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/knowledgedrop}
+    username: ${DB_USER:knowledgedrop}
+    password: ${DB_PASSWORD:knowledgedrop}
+  jpa:
+    hibernate:
+      # Dev convenience. Move to versioned migrations (e.g. Flyway) before any real deployment.
+      ddl-auto: update
+    open-in-view: false
+
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 25MB
+
+  # Redis Stack (RediSearch module required for vector KNN search): chunk embeddings.
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+  # Elasticsearch: keyword index (BM25).
+  elasticsearch:
+    uris: ${ELASTICSEARCH_URIS:http://localhost:9200}
+
+# Application tunables (see KnowledgeDropProperties).
+knowledgedrop:
+  storage-dir: ./data/files   # original uploaded files
+  ingestion:
+    chunk-size: 800           # characters per chunk
+    chunk-overlap: 100
+  retrieval:
+    default-k: 5              # default K for ask / similarity / compare / eval
+    rrf-k: 60                 # RRF constant: score = sum(1 / (rrf-k + rank))
+    candidate-pool: 50        # results fetched per mode before fusion

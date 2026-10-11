@@ -1,0 +1,8 @@
+{
+  "recommendations": [
+    "vscjava.vscode-java-pack",
+    "vmware.vscode-boot-dev-pack",
+    "shengchen.vscode-checkstyle",
+    "Gruntfuggly.todo-tree"
+  ]
+}
