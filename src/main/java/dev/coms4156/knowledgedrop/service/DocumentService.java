@@ -30,7 +30,7 @@ public class DocumentService {
    */
   public DocumentStatusResponse create(
       ClientRecord client, CreateDocumentRequest metadata, MultipartFile file) {
-    // TODO: create: validate: type via DocumentType.fromValue (400 if unsupported), exactly one of
+    // TODO: create: validate: type is an approved MIME type (400 if unsupported), exactly one of
     //   file / metadata.text(), and content not empty (400). Reject a duplicate name for this
     //   client (409).
     // TODO: create: store the original bytes and create a DocumentRecord (status = processing).

@@ -226,7 +226,7 @@ class ApiAuthIntegrationTest {
     mockMvc
         .perform(
             multipart("/knowledgeDrop/create")
-                .file(metadataPart("{\"name\":\"notes.txt\",\"type\":\"text\"}"))
+                .file(metadataPart("{\"name\":\"notes.txt\",\"type\":\"text/plain\"}"))
                 .file(binaryFilePart("hello world"))
                 .header(HttpHeaders.AUTHORIZATION, bearer(token)))
         .andExpect(ApiAuthIntegrationTest::assertNotRejectedBeforeService);
@@ -239,7 +239,7 @@ class ApiAuthIntegrationTest {
     mockMvc
         .perform(
             multipart("/knowledgeDrop/create")
-                .file(metadataPart("{\"name\":\"n\",\"type\":\"text\",\"text\":\"hi\"}"))
+                .file(metadataPart("{\"name\":\"n\",\"type\":\"text/plain\",\"text\":\"hi\"}"))
                 .header(HttpHeaders.AUTHORIZATION, bearer(token)))
         .andExpect(ApiAuthIntegrationTest::assertNotRejectedBeforeService);
   }
@@ -251,7 +251,7 @@ class ApiAuthIntegrationTest {
     mockMvc
         .perform(
             multipart("/knowledgeDrop/create")
-                .file(metadataPart("{\"name\":\"\",\"type\":\"text\"}"))
+                .file(metadataPart("{\"name\":\"\",\"type\":\"text/plain\"}"))
                 .file(binaryFilePart("hello"))
                 .header(HttpHeaders.AUTHORIZATION, bearer(token)))
         .andExpect(status().isBadRequest())
@@ -275,7 +275,7 @@ class ApiAuthIntegrationTest {
     mockMvc
         .perform(
             multipart("/knowledgeDrop/create")
-                .file(metadataPart("{\"name\":\"a\",\"type\":\"text\"}"))
+                .file(metadataPart("{\"name\":\"a\",\"type\":\"text/plain\"}"))
                 .file(binaryFilePart("hello")))
         .andExpect(status().isUnauthorized());
   }

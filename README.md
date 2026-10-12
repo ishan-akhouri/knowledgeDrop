@@ -80,7 +80,7 @@ All paths are under `/knowledgeDrop`.
 
 | Method | Endpoint | Inputs | Behavior |
 |---|---|---|---|
-| POST | `/knowledgeDrop/create` | Token, document name, type (`pdf`, `text`, `image`), content | Stores the file, runs the ingestion pipeline, and returns the document ID and status. Errors on an unsupported type, empty content, or a name the client already uses (409). |
+| POST | `/knowledgeDrop/create` | Token, document name, MIME type (for example, `application/pdf` or `text/plain`), content | Stores the file, runs the ingestion pipeline, and returns the document ID and status. Errors on an unsupported type, empty content, or a name the client already uses (409). |
 | PUT | `/knowledgeDrop/update` | Token, document ID or name, new content | Deletes the document's existing chunks and embeddings from Elasticsearch and re-ingests the new content. Keeps the same document ID and sets status to `processing`. |
 | GET | `/knowledgeDrop/read` | Token, document ID or name | Returns the content, ID, filename, type, upload time, and status, or HTTP 404. |
 | DELETE | `/knowledgeDrop/delete` | Token, document ID or name | Deletes the stored file, its Elasticsearch chunk entries and embeddings, and the document record. |
@@ -165,11 +165,11 @@ curl -s localhost:8080/knowledgeDrop/list -H "Authorization: Bearer $TOKEN"
 
 # create: JSON metadata part + binary file part
 curl -s -X POST localhost:8080/knowledgeDrop/create -H "Authorization: Bearer $TOKEN" \
-  -F 'metadata={"name":"policy.pdf","type":"pdf"};type=application/json' \
+  -F 'metadata={"name":"policy.pdf","type":"application/pdf"};type=application/json' \
   -F 'file=@policy.pdf;type=application/octet-stream'
 ```
 
-`create` and `update` use `multipart/form-data`: a `metadata` JSON part (`{"name": "...", "type": "pdf|text|image"}`, optionally `"text"` for raw text) and a `file` part. `update` metadata uses `{"documentId": "..."}` or `{"documentName": "..."}`.
+`create` and `update` use `multipart/form-data`: a `metadata` JSON part (`{"name": "...", "type": "application/pdf|text/plain"}`, optionally `"text"` for raw text) and a `file` part. `update` metadata uses `{"documentId": "..."}` or `{"documentName": "..."}`.
 
 ### Implementation status
 
