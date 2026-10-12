@@ -133,9 +133,29 @@ docker compose up -d     # PostgreSQL, Redis Stack, Elasticsearch
 docker compose down      # stop the datastores (add -v to wipe their data)
 ```
 
-Defaults match `src/main/resources/application.yml`. Override with `DB_URL`, `DB_USER`, `DB_PASSWORD`, `REDIS_HOST`, `REDIS_PORT`, and `ELASTICSEARCH_URIS`. **Tests do not need Docker**: they run against in-memory H2 (`application-test.yml`).
+Defaults match `src/main/resources/application.yml`. **Tests do not need Docker**: they run against in-memory H2 (`application-test.yml`).
 
 If `./mvnw` says permission denied, run `chmod +x mvnw`.
+
+### Configuration
+
+Settings and secrets live in a local `.env` file, which is gitignored. Copy the template and edit it:
+
+```bash
+cp .env.example .env
+```
+
+Spring loads `.env` on startup (`spring.config.import`) and Docker Compose reads it too, so one file drives both. A missing `.env` is fine: every value has a local default, which is why tests and CI need no setup.
+
+| Variable | Used for |
+|---|---|
+| `DB_URL`, `DB_USER`, `DB_PASSWORD` | PostgreSQL (also the Postgres container's credentials) |
+| `ELASTICSEARCH_URIS` | Elasticsearch |
+| `REDIS_HOST`, `REDIS_PORT` | Redis Stack |
+| `EMBEDDING_BASE_URL`, `EMBEDDING_MODEL`, `EMBEDDING_DIMENSION` | Embedding service |
+| `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL` | Hosted LLM |
+
+Never commit `.env`. Add new variables to `.env.example` with a safe placeholder.
 
 ### Try it
 
