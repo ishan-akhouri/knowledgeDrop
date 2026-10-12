@@ -12,6 +12,8 @@ import java.util.List;
  * the 1-based position of the chunk in that list. A chunk missing from a list adds nothing for
  * that list. {@code rrfK} defaults to 60 (knowledgedrop.retrieval.rrf-k).
  */
+// TODO: remove this suppression once merge() uses rrfK (KD-17).
+@SuppressWarnings("PMD.UnusedPrivateField")
 public final class RrfMerger {
 
   private final int rrfK;
@@ -35,11 +37,11 @@ public final class RrfMerger {
    *     score field set to the RRF score
    */
   public List<RankedChunk> merge(List<List<RankedChunk>> rankedLists, int limit) {
-    // TODO(retrieval): identify chunks across lists by chunkId.
-    // TODO(retrieval): sum 1 / (rrfK + rank) per chunk across every list it appears in.
-    // TODO(retrieval): sort by score descending; break ties deterministically (for example by
+    // TODO: retrieval: identify chunks across lists by chunkId.
+    // TODO: retrieval: sum 1 / (rrfK + rank) per chunk across every list it appears in.
+    // TODO: retrieval: sort by score descending; break ties deterministically (for example by
     //   chunkId) so tests and eval are repeatable.
-    // TODO(retrieval): cut to limit, renumber ranks from 1.
+    // TODO: retrieval: cut to limit, renumber ranks from 1.
     throw new UnsupportedOperationException("RRF merge");
   }
 

@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
  * <p>DEFERRED: vector search needs an embedding provider, which has not been chosen yet. Do not
  * build until that decision is made.
  *
- * <p>TODO(retrieval): the three retrieval modes and reciprocal rank fusion should live in one
+ * <p>TODO: retrieval: the three retrieval modes and reciprocal rank fusion should live in one
  * shared component that ask, compare, and eval all use. RRF score = sum over lists of 1 / (rrfK +
  * rank), with rrfK from knowledgedrop.retrieval.rrf-k (default 60).
  */
@@ -29,11 +29,11 @@ public class SearchService {
    * @return the top K chunks per mode and an overlap summary
    */
   public CompareResponse compare(ClientRecord client, CompareRequest request) {
-    // TODO(compare): if the client has no ready documents, return an error with a reason.
-    // TODO(compare): scope every search to the client's documents.
-    // TODO(compare): run vector search (Redis), keyword search (Elasticsearch BM25), and hybrid
+    // TODO: compare: if the client has no ready documents, return an error with a reason.
+    // TODO: compare: scope every search to the client's documents.
+    // TODO: compare: run vector search (Redis), keyword search (Elasticsearch BM25), and hybrid
     //   (both lists merged with RRF); record rank and score per chunk per mode.
-    // TODO(compare): build the overlap summary (which chunks appear in more than one mode).
+    // TODO: compare: build the overlap summary (which chunks appear in more than one mode).
     throw ApiException.notImplemented("POST /knowledgeDrop/compare");
   }
 
@@ -45,12 +45,12 @@ public class SearchService {
    * @return recall@K and MRR per mode, plus a per-question breakdown
    */
   public EvalResponse eval(ClientRecord client, EvalRequest request) {
-    // TODO(eval): verify every labeled document/chunk ID belongs to the client; otherwise return
+    // TODO: eval: verify every labeled document/chunk ID belongs to the client; otherwise return
     //   an error with a reason. Require at least one label per question (400).
-    // TODO(eval): run each question through vector, keyword, and hybrid retrieval.
-    // TODO(eval): recall@K = fraction of questions with a correct source in the top K;
+    // TODO: eval: run each question through vector, keyword, and hybrid retrieval.
+    // TODO: eval: recall@K = fraction of questions with a correct source in the top K;
     //   MRR = mean of 1 / rank of the first correct source (0 if not found).
-    // TODO(eval): return per-mode metrics and the per-question rank breakdown.
+    // TODO: eval: return per-mode metrics and the per-question rank breakdown.
     throw ApiException.notImplemented("POST /knowledgeDrop/eval");
   }
 }

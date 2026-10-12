@@ -14,14 +14,19 @@ import org.springframework.data.jpa.repository.JpaRepository;
  */
 public interface DocumentRepository extends JpaRepository<DocumentRecord, UUID> {
 
+  /** Finds a document by ID, only if it belongs to the given client. */
   Optional<DocumentRecord> findByIdAndOwnerId(UUID id, UUID ownerId);
 
+  /** Finds a document by name within one client's documents. */
   Optional<DocumentRecord> findByOwnerIdAndName(UUID ownerId, String name);
 
+  /** Returns true if the client owns at least one document with this status. */
   boolean existsByOwnerIdAndStatus(UUID ownerId, DocumentStatus status);
 
+  /** Lists one client's documents, one page at a time. */
   Page<DocumentRecord> findByOwnerId(UUID ownerId, Pageable pageable);
 
+  /** Lists one client's documents with the given status, one page at a time. */
   Page<DocumentRecord> findByOwnerIdAndStatus(
       UUID ownerId, DocumentStatus status, Pageable pageable);
 }

@@ -9,7 +9,7 @@ import java.util.UUID;
  * <p>Every method is scoped to one client. Elasticsearch is also the source of chunk text in
  * document order, which summarize reads.
  *
- * <p>TODO(keyword-index): write {@code ElasticsearchKeywordIndex implements KeywordIndex}.
+ * <p>TODO: keyword-index: write {@code ElasticsearchKeywordIndex implements KeywordIndex}.
  * Index fields: chunkId, clientId (keyword), documentId (keyword), page, position (integer, for
  * ordering), text (analyzed text). Always filter by clientId in the query.
  */

@@ -128,7 +128,7 @@ Requires JDK 17 (newer JDKs break PMD) and Docker Desktop. No Maven install need
 
 ```bash
 docker compose up -d     # PostgreSQL, Redis Stack, Elasticsearch
-./mvnw verify            # compile, test, JaCoCo report, Checkstyle, PMD
+./mvnw verify            # compile, test, JaCoCo report and minimum, Checkstyle, PMD (all enforced)
 ./mvnw spring-boot:run   # start on http://localhost:8080
 docker compose down      # stop the datastores (add -v to wipe their data)
 ```
@@ -157,19 +157,19 @@ curl -s -X POST localhost:8080/knowledgeDrop/create -H "Authorization: Bearer $T
 
 ### Implementation status
 
-Endpoint logic that is not built yet is marked `TODO(<endpoint>)` and returns `501 Not Implemented`. The AI-dependent items are **DEFERRED** until an LLM and embedding provider are chosen. Find every open item with `grep -rn "TODO(" src/main`. Matching disabled tests live in `EndpointTodoTests`; move each into a real test class as you build the endpoint.
+Endpoint logic that is not built yet is marked with a `TODO:` comment that names the endpoint (for example `TODO: create: ...`) and returns `501 Not Implemented`. The AI-dependent items are **DEFERRED** until an LLM and embedding provider are chosen. Find every open item with `grep -rn "TODO:" src/main`. Matching disabled tests live in `EndpointTodoTests`; move each into a real test class as you build the endpoint.
 
 | Endpoint | Status | Implement in |
 |---|---|---|
 | `POST registerClient` | **Built** (reference implementation) | `ClientService.register` |
-| `POST create` | TODO(create) | `DocumentService.create` |
-| `PUT update` | TODO(update) | `DocumentService.update` |
-| `GET read` | TODO(read) | `DocumentService.read` |
-| `DELETE delete` | TODO(delete) | `DocumentService.delete` |
-| `GET list` | TODO(list) | `DocumentService.list` |
-| `DELETE clientDrop` | TODO(clientDrop) | `ClientService.drop` |
-| `GET health` | TODO(health) | `HealthService.check` |
-| Ingestion pipeline (extract, chunk, keyword index) | TODO(ingestion) | `IngestionService` |
+| `POST create` | To do | `DocumentService.create` |
+| `PUT update` | To do | `DocumentService.update` |
+| `GET read` | To do | `DocumentService.read` |
+| `DELETE delete` | To do | `DocumentService.delete` |
+| `GET list` | To do | `DocumentService.list` |
+| `DELETE clientDrop` | To do | `ClientService.drop` |
+| `GET health` | To do | `HealthService.check` |
+| Ingestion pipeline (extract, chunk, keyword index) | To do | `IngestionService` |
 | `POST ask` | **DEFERRED** (LLM + embeddings) | `AskService.ask` |
 | `POST similarity` | **DEFERRED** (embeddings) | `AskService.similarity` |
 | `POST compare` | **DEFERRED** (embeddings) | `SearchService.compare` |
@@ -209,13 +209,17 @@ Adding an endpoint: fill in the service method (the controller, DTOs, auth, and 
 | Project management | Jira Kanban board |
 | IDE | Visual Studio Code |
 
-Checkstyle, PMD, and the JaCoCo gate are non-blocking by default so the first CI run is not red. Once the team has a clean run, enforce them in `pom.xml` `<properties>`:
+### Quality gates
+
+Checkstyle, PMD, and JaCoCo are enforced: `./mvnw verify` (and CI) fails on any Checkstyle or PMD violation, or when line coverage falls below the minimum. The settings live in `pom.xml` `<properties>`:
 
 ```xml
 <quality.failOnViolation>true</quality.failOnViolation>
 <quality.checkstyle.severity>warning</quality.checkstyle.severity>
-<jacoco.line.coverage.min>0.80</jacoco.line.coverage.min>
+<jacoco.line.coverage.min>0.50</jacoco.line.coverage.min>
 ```
+
+Coverage is a ratchet. The minimum starts at the current baseline and is raised as features and tests land, never lowered. The target is 85% or more by project completion. Each feature PR includes its own tests.
 
 ## Design Assumptions
 
