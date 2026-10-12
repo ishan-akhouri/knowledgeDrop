@@ -20,21 +20,8 @@ services:
       timeout: 5s
       retries: 5
 
-  # Redis Stack includes the RediSearch module, which vector search requires.
-  # Plain "redis" will NOT work for vector KNN.
-  redis:
-    image: redis/redis-stack-server:latest
-    container_name: kd-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - kd-redis-data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
+  # Elasticsearch serves both retrieval modes: keyword search (BM25) and semantic vector search
+  # (dense_vector fields queried with kNN).
   # TODO: pin the image to the same major version as the Elasticsearch client Spring Boot pulls in
   #   (check with: ./mvnw dependency:tree | grep elasticsearch). Single node, security off: local dev only.
   elasticsearch:
@@ -56,6 +43,5 @@ services:
 
 volumes:
   kd-postgres-data:
-  kd-redis-data:
   kd-es-data:
 

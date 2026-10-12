@@ -4,7 +4,7 @@ KnowledgeDrop is a REST API that works like a drop box for knowledge. Client pro
 
 ## Why Hybrid Retrieval
 
-Vector search is strong at meaning (for example, "How do I cancel?" matching a termination policy) but weak at exact terms such as error codes, IDs, and names. Keyword search (Elasticsearch BM25) is the opposite. KnowledgeDrop runs both and merges the result lists with Reciprocal Rank Fusion (RRF), which retrieves better than either method alone. The `compare` and `eval` endpoints measure that claim with real numbers.
+Vector search is strong at meaning (for example, "How do I cancel?" matching a termination policy) but weak at exact terms such as error codes, IDs, and names. Keyword search (Elasticsearch BM25) is the opposite. KnowledgeDrop runs both inside Elasticsearch (semantic vector search over `dense_vector` embeddings, plus BM25 over the chunk text) and merges the result lists with Reciprocal Rank Fusion (RRF), which retrieves better than either method alone. The `compare` and `eval` endpoints measure that claim with real numbers.
 
 ## Architecture
 
@@ -15,7 +15,7 @@ flowchart TB
     API -->|create / update| Ingest
     API -->|registerClient / read / list| REC
     API -->|delete / clientDrop| Stores
-    API -.->|health<br/>pings Redis + Elasticsearch| Stores
+    API -.->|health<br/>pings Elasticsearch| Stores
     API -.->|ask / compare / eval<br/>similarity: vector only| Retrieval
     API -->|summarize| SUM[Summarize<br/>map-reduce]
 
@@ -27,16 +27,14 @@ flowchart TB
 
     subgraph Stores["Datastores"]
         direction LR
-        R[(Redis Stack<br/>embeddings)]
         REC[(PostgreSQL<br/>service records<br/>clients<br/>documents<br/>status)]
-        E[(Elasticsearch<br/>chunks + BM25)]
+        E[(Elasticsearch<br/>chunks + BM25<br/>embeddings + kNN)]
     end
 
-    EMB --> R
+    EMB --> E
     CH --> E
     Ingest -->|status| REC
 
-    R --> Retrieval
     E --> Retrieval
     E -->|chunks in order| SUM
     REC -.->|ownership + status| SUM
@@ -53,8 +51,7 @@ flowchart TB
 
 - **Spring Boot:** REST endpoints, request validation, client authentication, and the service's own records of clients and documents.
 - **PostgreSQL:** stores those records (owner, name, type, upload time, status) through JPA.
-- **Redis Stack:** stores chunk embeddings and serves vector similarity search (the RediSearch module is required).
-- **Elasticsearch:** stores chunk text and metadata and serves keyword search.
+- **Elasticsearch:** stores chunk text, metadata, and chunk embeddings. It serves semantic vector search (kNN over `dense_vector` fields) and keyword search (BM25).
 - **LLM:** generates answers from retrieved context and produces summaries.
 - **Scoping:** every query is filtered by client, so one client never sees another client's data.
 
@@ -65,7 +62,7 @@ All API traffic uses REST with JSON request and response bodies.
 - **Authentication:** the client token returned by `registerClient` is sent as `Authorization: Bearer <token>` on every endpoint except `registerClient` and `health`. Invalid or missing tokens return HTTP 401. Only a SHA-256 hash of the token is stored.
 - **Document status:** each document is `processing` (being ingested), `ready` (searchable), or `failed`. Search, `ask`, `similarity`, and `summarize` only use `ready` documents.
 - **Document names:** a document can be referenced by ID or by name, so names are unique per client. `create` returns HTTP 409 if the client already has a document with that name.
-- **Ingestion pipeline:** `create` and `update` extract text (direct read for text files, text extraction for PDFs, OCR for images, keeping page numbers), split it into chunks, embed each chunk into Redis, and index each chunk in Elasticsearch. Ingestion runs in the background, so `create` and `update` return `202 Accepted` with status `processing`.
+- **Ingestion pipeline:** `create` and `update` extract text (direct read for text files, text extraction for PDFs, OCR for images, keeping page numbers), split it into chunks, embed each chunk into the Elasticsearch vector store, and index each chunk's text in Elasticsearch for keyword search. Ingestion runs in the background, so `create` and `update` return `202 Accepted` with status `processing`.
 - **Errors:** always `{"error": "Not Found", "reason": "..."}`.
 
 ## API Reference
@@ -77,16 +74,16 @@ All paths are under `/knowledgeDrop`.
 | Method | Endpoint | Inputs | Behavior |
 |---|---|---|---|
 | POST | `/knowledgeDrop/registerClient` | Client object (client name) | Creates a client with a new client ID and token. Returns both, or HTTP 409 if the name is already registered. |
-| DELETE | `/knowledgeDrop/clientDrop` | Token, client ID | Verifies the token matches the client ID, then deletes all of the client's documents (files, Redis embeddings, Elasticsearch entries), the client record, and the token. |
+| DELETE | `/knowledgeDrop/clientDrop` | Token, client ID | Verifies the token matches the client ID, then deletes all of the client's documents (files, Elasticsearch chunk entries and embeddings), the client record, and the token. |
 
 ### Document Management
 
 | Method | Endpoint | Inputs | Behavior |
 |---|---|---|---|
 | POST | `/knowledgeDrop/create` | Token, document name, type (`pdf`, `text`, `image`), content | Stores the file, runs the ingestion pipeline, and returns the document ID and status. Errors on an unsupported type, empty content, or a name the client already uses (409). |
-| PUT | `/knowledgeDrop/update` | Token, document ID or name, new content | Deletes the document's existing chunks from Redis and Elasticsearch and re-ingests the new content. Keeps the same document ID and sets status to `processing`. |
+| PUT | `/knowledgeDrop/update` | Token, document ID or name, new content | Deletes the document's existing chunks and embeddings from Elasticsearch and re-ingests the new content. Keeps the same document ID and sets status to `processing`. |
 | GET | `/knowledgeDrop/read` | Token, document ID or name | Returns the content, ID, filename, type, upload time, and status, or HTTP 404. |
-| DELETE | `/knowledgeDrop/delete` | Token, document ID or name | Deletes the stored file, its Redis embeddings, its Elasticsearch entries, and the document record. |
+| DELETE | `/knowledgeDrop/delete` | Token, document ID or name | Deletes the stored file, its Elasticsearch chunk entries and embeddings, and the document record. |
 | GET | `/knowledgeDrop/list` | Token, optional `status`, `limit`, `offset` | Returns the client's documents with ID, filename, type, upload time, and status. Returns an empty list if there are none. |
 
 ### Question Answering and Similarity
@@ -108,7 +105,7 @@ All paths are under `/knowledgeDrop`.
 
 | Method | Endpoint | Behavior |
 |---|---|---|
-| GET | `/knowledgeDrop/health` | No token required. Pings Elasticsearch and Redis. Returns HTTP 200 if both are reachable, 503 if either is down, with per-dependency status. |
+| GET | `/knowledgeDrop/health` | No token required. Pings Elasticsearch. Returns HTTP 200 if it is reachable, 503 if it is down, with the dependency status. |
 
 ## Example Client Programs
 
@@ -118,7 +115,7 @@ All paths are under `/knowledgeDrop`.
 ## Tech Stack
 
 - **Language and framework:** Java 17, Spring Boot
-- **Datastores:** PostgreSQL (service records), Redis Stack (vectors), Elasticsearch (keyword search)
+- **Datastores:** PostgreSQL (service records), Elasticsearch (semantic vector store and keyword search)
 - **Local infrastructure:** Docker Compose
 - **Data format:** JSON
 
@@ -127,13 +124,13 @@ All paths are under `/knowledgeDrop`.
 Requires JDK 17 (newer JDKs break PMD) and Docker Desktop. No Maven install needed; use the wrapper.
 
 ```bash
-docker compose up -d     # PostgreSQL, Redis Stack, Elasticsearch
+docker compose up -d     # PostgreSQL, Elasticsearch
 ./mvnw verify            # compile, test, JaCoCo report and minimum, Checkstyle, PMD (all enforced)
 ./mvnw spring-boot:run   # start on http://localhost:8080
 docker compose down      # stop the datastores (add -v to wipe their data)
 ```
 
-Defaults match `src/main/resources/application.yml`. Override with `DB_URL`, `DB_USER`, `DB_PASSWORD`, `REDIS_HOST`, `REDIS_PORT`, and `ELASTICSEARCH_URIS`. **Tests do not need Docker**: they run against in-memory H2 (`application-test.yml`).
+Defaults match `src/main/resources/application.yml`. Override with `DB_URL`, `DB_USER`, `DB_PASSWORD`, and `ELASTICSEARCH_URIS`. **Tests do not need Docker**: they run against in-memory H2 (`application-test.yml`).
 
 If `./mvnw` says permission denied, run `chmod +x mvnw`.
 
@@ -175,7 +172,7 @@ Endpoint logic that is not built yet is marked with a `TODO:` comment that names
 | `POST compare` | **DEFERRED** (embeddings) | `SearchService.compare` |
 | `POST eval` | **DEFERRED** (embeddings) | `SearchService.eval` |
 | `POST summarize` | **DEFERRED** (LLM) | `SummarizationService.summarize` |
-| Chunk embeddings in Redis, RRF | **DEFERRED** | `IngestionService`, `retrieval/` package |
+| Chunk embeddings in Elasticsearch, RRF | **DEFERRED** | `IngestionService`, `retrieval/` package |
 
 ### Code layout
 

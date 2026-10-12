@@ -14,7 +14,8 @@ import java.util.UUID;
 
 /**
  * Service-side record of an uploaded document: owner, name, type, upload time, and status. Chunk
- * embeddings live in Redis and keyword entries in Elasticsearch, keyed by this record's ID.
+ * text and embeddings live in Elasticsearch (keyword index and vector store), keyed by this
+ * record's ID.
  *
  * <p>Document names are unique per client so that "document ID or document name" lookups are
  * unambiguous.

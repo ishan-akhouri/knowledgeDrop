@@ -24,7 +24,7 @@ public class HealthController {
     this.healthService = healthService;
   }
 
-  /** Returns 200 if Redis and Elasticsearch are both reachable, 503 if either is down. */
+  /** Returns 200 if Elasticsearch is reachable, 503 if it is down. */
   @GetMapping("/health")
   public ResponseEntity<HealthResponse> health() {
     HealthResponse body = healthService.check();

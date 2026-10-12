@@ -25,20 +25,20 @@ public class IngestionService {
     //   example Apache PDFBox), OCR for images (for example Tess4J). Keep page numbers.
     // TODO: ingestion: split the text into chunks using knowledgedrop.ingestion.* settings.
     // TODO: ingestion [DEFERRED: embedding provider undecided]: create an embedding per chunk
-    //   and insert it into the vector store.
+    //   and insert it into the Elasticsearch vector store.
     // TODO: ingestion: index each chunk in Elasticsearch for BM25 keyword search.
     // TODO: ingestion: set status = ready, or failed with a reason if any step throws.
     throw ApiException.notImplemented("document ingestion pipeline");
   }
 
   /**
-   * Removes a document's chunks from Redis and Elasticsearch.
+   * Removes a document's chunks and embeddings from Elasticsearch.
    *
    * @param documentId the document whose chunks should be deleted
    */
   public void deleteChunks(UUID documentId) {
-    // TODO: update, delete, clientDrop: delete all chunk embeddings (Redis) and chunk entries
-    //   (Elasticsearch) belonging to documentId.
+    // TODO: update, delete, clientDrop: delete all chunk embeddings (vector store) and chunk
+    //   entries (keyword index) in Elasticsearch belonging to documentId.
     throw ApiException.notImplemented("chunk deletion");
   }
 }

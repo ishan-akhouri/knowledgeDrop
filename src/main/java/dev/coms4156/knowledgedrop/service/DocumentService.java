@@ -52,7 +52,7 @@ public class DocumentService {
       ClientRecord client, DocumentRef ref, String text, MultipartFile file) {
     // TODO: update: locate the document and verify it belongs to the client (404 / not owned).
     // TODO: update: require exactly one of file / text, not empty (400).
-    // TODO: update: delete the existing chunks from Redis and Elasticsearch
+    // TODO: update: delete the existing chunks and embeddings from Elasticsearch
     //   (IngestionService.deleteChunks).
     // TODO: update: store the new content, set status = processing, re-run ingestion.
     throw ApiException.notImplemented("PUT /knowledgeDrop/update");
@@ -80,8 +80,8 @@ public class DocumentService {
    */
   public MessageResponse delete(ClientRecord client, DocumentRef ref) {
     // TODO: delete: locate the document and verify ownership.
-    // TODO: delete: delete the stored file, the Redis chunk embeddings, the Elasticsearch
-    //   entries, and finally the document record.
+    // TODO: delete: delete the stored file, the Elasticsearch chunk entries and embeddings, and
+    //   finally the document record.
     throw ApiException.notImplemented("DELETE /knowledgeDrop/delete");
   }
 

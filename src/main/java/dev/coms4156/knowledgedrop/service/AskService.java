@@ -26,7 +26,7 @@ public class AskService {
    */
   public AskResponse ask(ClientRecord client, AskRequest request) {
     // TODO: ask: if the client has no ready documents, return an error with a reason.
-    // TODO: ask: run hybrid retrieval (Redis vector search + Elasticsearch BM25, merged with RRF)
+    // TODO: ask: run hybrid retrieval (Elasticsearch kNN vector search + BM25, merged with RRF)
     //   over the client's ready documents; K defaults to knowledgedrop.retrieval.default-k (5).
     // TODO: ask: pass the top K chunks to an LLM with instructions to answer only from that
     //   context.

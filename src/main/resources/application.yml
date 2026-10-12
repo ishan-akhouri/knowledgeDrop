@@ -18,13 +18,7 @@ spring:
       max-file-size: 25MB
       max-request-size: 25MB
 
-  # Redis Stack (RediSearch module required for vector KNN search): chunk embeddings.
-  data:
-    redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-
-  # Elasticsearch: keyword index (BM25).
+  # Elasticsearch: keyword index (BM25) and semantic vector store (chunk embeddings, kNN).
   elasticsearch:
     uris: ${ELASTICSEARCH_URIS:http://localhost:9200}
 
