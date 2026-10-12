@@ -9,7 +9,7 @@ import jakarta.validation.constraints.Size;
  * here for raw text. Provide exactly one of the two.
  *
  * @param name document name, unique per client
- * @param type "pdf", "text", or "image"
+ * @param type document MIME type, such as "application/pdf" or "text/plain"
  * @param text raw text content, or null when a file part is sent
  */
 public record CreateDocumentRequest(

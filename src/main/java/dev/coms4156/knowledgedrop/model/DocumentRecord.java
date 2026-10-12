@@ -9,7 +9,10 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.UUID;
 
 /**
@@ -19,6 +22,8 @@ import java.util.UUID;
  *
  * <p>Document names are unique per client so that "document ID or document name" lookups are
  * unambiguous.
+ * 
+ * Document Storage location will be in directory ./data/"owner_id"/"name"  
  */
 @Entity
 @Table(
@@ -38,9 +43,8 @@ public class DocumentRecord {
   @Column(nullable = false)
   private String name;
 
-  @Enumerated(EnumType.STRING)
-  @Column(name = "doc_type", nullable = false)
-  private DocumentType type;
+  @Column(name = "doc_type", nullable = false, length = 255)
+  private String type;
 
   @Enumerated(EnumType.STRING)
   @Column(nullable = false)
@@ -49,12 +53,19 @@ public class DocumentRecord {
   @Column(name = "failure_reason", length = MAX_REASON_LENGTH)
   private String failureReason;
 
-  /** Where the original uploaded file is stored. */
-  @Column(name = "storage_path")
-  private String storagePath;
+  /** Size of the stored content in bytes. */
+  @Column(name = "file_bytes")
+  private int fileBytes;
+
+  /** SHA-1 hash of the stored content, encoded as lowercase hexadecimal. */
+  @Column(name = "content_hash", length = 40)
+  private String contentHash;
 
   @Column(name = "uploaded_at", nullable = false)
   private Instant uploadedAt;
+
+  @Column(name = "deleted_at")
+  private Instant deletedAt;
 
   /** Required by JPA. */
   protected DocumentRecord() {}
@@ -64,14 +75,12 @@ public class DocumentRecord {
    *
    * @param ownerId ID of the owning client
    * @param name document name, unique per client
-   * @param type document type
-   * @param storagePath location of the stored original file
+   * @param type document MIME type
    */
-  public DocumentRecord(UUID ownerId, String name, DocumentType type, String storagePath) {
+  public DocumentRecord(UUID ownerId, String name, String type) {
     this.ownerId = ownerId;
     this.name = name;
     this.type = type;
-    this.storagePath = storagePath;
     this.status = DocumentStatus.PROCESSING;
     this.uploadedAt = Instant.now();
   }
@@ -113,7 +122,7 @@ public class DocumentRecord {
     return name;
   }
 
-  public DocumentType getType() {
+  public String getType() {
     return type;
   }
 
@@ -125,15 +134,39 @@ public class DocumentRecord {
     return failureReason;
   }
 
-  public String getStoragePath() {
-    return storagePath;
+  public int getFileBytes() {
+    return fileBytes;
   }
 
-  public void setStoragePath(String storagePath) {
-    this.storagePath = storagePath;
+  public String getContentHash() {
+    return contentHash;
+  }
+
+  /**
+   * Records the size and SHA-1 hash of the document content.
+   * SHA-1 produces a 160 bit digest. 8 bytes
+   *
+   * @param content document bytes
+   */
+  public void recordContent(byte[] content) {
+    this.fileBytes = content.length;
+    try {
+      this.contentHash =
+          HexFormat.of().formatHex(MessageDigest.getInstance("SHA-1").digest(content));
+    } catch (NoSuchAlgorithmException e) {
+      throw new IllegalStateException("SHA-1 is not available", e);
+    }
   }
 
   public Instant getUploadedAt() {
     return uploadedAt;
+  }
+
+  public Instant getDeletedAt() {
+    return deletedAt;
+  }
+
+  public void setDeletedAt(Instant deletedAt) {
+    this.deletedAt = deletedAt;
   }
 }
