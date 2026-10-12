@@ -22,8 +22,6 @@ import java.util.UUID;
  *
  * <p>Document names are unique per client so that "document ID or document name" lookups are
  * unambiguous.
- * 
- * Document Storage location will be in directory ./data/"owner_id"/"name"  
  */
 @Entity
 @Table(
