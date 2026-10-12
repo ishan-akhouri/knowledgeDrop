@@ -2,6 +2,11 @@ spring:
   application:
     name: knowledgedrop
 
+  # Optional .env in the working directory (KEY=value lines). Gitignored; see .env.example.
+  # Missing file is fine, so tests and CI run without it.
+  config:
+    import: optional:file:.env[.properties]
+
   # Service records (clients + documents) live in PostgreSQL.
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/knowledgedrop}
@@ -32,3 +37,13 @@ knowledgedrop:
     default-k: 5              # default K for ask / similarity / compare / eval
     rrf-k: 60                 # RRF constant: score = sum(1 / (rrf-k + rank))
     candidate-pool: 50        # results fetched per mode before fusion
+  # Embedding service (sentence-transformers). Dimension must match the vector index mapping.
+  embedding:
+    base-url: ${EMBEDDING_BASE_URL:http://localhost:5000}
+    model: ${EMBEDDING_MODEL:all-MiniLM-L6-v2}
+    dimension: ${EMBEDDING_DIMENSION:384}
+  # Hosted LLM behind LlmClient. The key comes from .env only; never hardcode it here.
+  llm:
+    provider: ${LLM_PROVIDER:}
+    api-key: ${LLM_API_KEY:}
+    model: ${LLM_MODEL:}

@@ -11,12 +11,16 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param storageDir directory where original uploaded files are kept
  * @param ingestion chunking settings
  * @param retrieval retrieval and rank-fusion settings
+ * @param embedding embedding service settings
+ * @param llm hosted language model settings
  */
 @ConfigurationProperties(prefix = "knowledgedrop")
 public record KnowledgeDropProperties(
     @DefaultValue("./data/files") String storageDir,
     @DefaultValue Ingestion ingestion,
-    @DefaultValue Retrieval retrieval) {
+    @DefaultValue Retrieval retrieval,
+    @DefaultValue Embedding embedding,
+    @DefaultValue Llm llm) {
 
   /**
    * Chunking settings.
@@ -39,4 +43,35 @@ public record KnowledgeDropProperties(
       @DefaultValue("5") int defaultK,
       @DefaultValue("60") int rrfK,
       @DefaultValue("50") int candidatePool) {}
+
+  /**
+   * Embedding service settings.
+   *
+   * @param baseUrl base URL of the embedding service
+   * @param model embedding model name
+   * @param dimension vector length produced by the model; must match the index mapping
+   */
+  public record Embedding(
+      @DefaultValue("http://localhost:5000") String baseUrl,
+      @DefaultValue("all-MiniLM-L6-v2") String model,
+      @DefaultValue("384") int dimension) {}
+
+  /**
+   * Hosted language model settings.
+   *
+   * @param provider provider name, for example {@code anthropic}
+   * @param apiKey provider API key, supplied through the environment or {@code .env}
+   * @param model model identifier passed to the provider
+   */
+  public record Llm(
+      @DefaultValue("") String provider,
+      @DefaultValue("") String apiKey,
+      @DefaultValue("") String model) {
+
+    @Override
+    public String toString() {
+      String key = apiKey.isEmpty() ? "<unset>" : "<redacted>";
+      return "Llm[provider=" + provider + ", apiKey=" + key + ", model=" + model + "]";
+    }
+  }
 }
