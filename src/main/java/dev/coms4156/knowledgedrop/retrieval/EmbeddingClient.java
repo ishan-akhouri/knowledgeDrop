@@ -22,7 +22,7 @@ public interface EmbeddingClient {
   /**
    * Embeds many pieces of text in one call (used by ingestion, one embedding per chunk).
    *
-   * <p>TODO(embedding): batch the provider request instead of calling {@link #embed} in a loop.
+   * <p>TODO: embedding: batch the provider request instead of calling {@link #embed} in a loop.
    *
    * @param texts the texts to embed
    * @return one vector per input, in the same order

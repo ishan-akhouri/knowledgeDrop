@@ -5,7 +5,7 @@ import java.util.UUID;
 /**
  * One chunk returned by a retrieval mode, with its rank and score in that mode.
  *
- * <p>TODO(retrieval): align the fields with {@code api.dto.ScoredChunk} so the services can map
+ * <p>TODO: retrieval: align the fields with {@code api.dto.ScoredChunk} so the services can map
  * between them without losing information (document ID, filename, page, snippet, score).
  *
  * @param chunkId stable ID of the chunk (the same ID in Redis and Elasticsearch)

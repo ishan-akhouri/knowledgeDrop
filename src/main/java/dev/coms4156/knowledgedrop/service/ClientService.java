@@ -75,11 +75,11 @@ public class ClientService {
    * @return confirmation message
    */
   public MessageResponse drop(ClientRecord client, UUID clientId) {
-    // TODO(clientDrop): verify clientId equals client.getId(); otherwise throw a 4xx
+    // TODO: clientDrop: verify clientId equals client.getId(); otherwise throw a 4xx
     //   "token and client ID do not match".
-    // TODO(clientDrop): delete every document the client owns, including the stored file, the
+    // TODO: clientDrop: delete every document the client owns, including the stored file, the
     //   Redis embeddings, and the Elasticsearch entries (reuse the DocumentService delete logic).
-    // TODO(clientDrop): delete the client record, which also invalidates the token.
+    // TODO: clientDrop: delete the client record, which also invalidates the token.
     throw ApiException.notImplemented("DELETE /knowledgeDrop/clientDrop");
   }
 }

@@ -25,13 +25,13 @@ public class AskService {
    * @return the answer and its citations
    */
   public AskResponse ask(ClientRecord client, AskRequest request) {
-    // TODO(ask): if the client has no ready documents, return an error with a reason.
-    // TODO(ask): run hybrid retrieval (Redis vector search + Elasticsearch BM25, merged with RRF)
+    // TODO: ask: if the client has no ready documents, return an error with a reason.
+    // TODO: ask: run hybrid retrieval (Redis vector search + Elasticsearch BM25, merged with RRF)
     //   over the client's ready documents; K defaults to knowledgedrop.retrieval.default-k (5).
-    // TODO(ask): pass the top K chunks to an LLM with instructions to answer only from that
+    // TODO: ask: pass the top K chunks to an LLM with instructions to answer only from that
     //   context.
-    // TODO(ask): attach a Citation (document ID, filename, page, snippet) per chunk used.
-    // TODO(ask): if retrieval returns nothing relevant, return a "not found in your documents"
+    // TODO: ask: attach a Citation (document ID, filename, page, snippet) per chunk used.
+    // TODO: ask: if retrieval returns nothing relevant, return a "not found in your documents"
     //   statement with HTTP 200 and no citations.
     throw ApiException.notImplemented("POST /knowledgeDrop/ask");
   }
@@ -44,10 +44,10 @@ public class AskService {
    * @return the top K stored documents with scores and best-matching snippets
    */
   public SimilarityResponse similarity(ClientRecord client, SimilarityRequest request) {
-    // TODO(similarity): if the client has no ready documents, return an error with a reason.
-    // TODO(similarity): embed the input text and compare it with the client's stored chunk
+    // TODO: similarity: if the client has no ready documents, return an error with a reason.
+    // TODO: similarity: embed the input text and compare it with the client's stored chunk
     //   embeddings (vector search only, no LLM).
-    // TODO(similarity): group chunk scores by document, rank documents, return the top K with the
+    // TODO: similarity: group chunk scores by document, rank documents, return the top K with the
     //   best-matching snippet each.
     throw ApiException.notImplemented("POST /knowledgeDrop/similarity");
   }

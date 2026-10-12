@@ -8,7 +8,7 @@ import java.util.UUID;
  *
  * <p>Every method is scoped to one client so one client can never see another's chunks.
  *
- * <p>TODO(vector-store): write {@code RedisVectorStore implements VectorStore}. Needs the
+ * <p>TODO: vector-store: write {@code RedisVectorStore implements VectorStore}. Needs the
  * RediSearch module (Redis Stack, see docker-compose.yml): create an index with a VECTOR field
  * whose DIM equals {@link EmbeddingClient#dimensions()}, plus TAG fields for clientId and
  * documentId so queries can filter.

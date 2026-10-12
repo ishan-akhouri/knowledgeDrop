@@ -8,7 +8,7 @@ import java.util.UUID;
 /**
  * Response of read: the stored content plus metadata.
  *
- * <p>TODO(read): decide how binary content (pdf, image) is returned in JSON, for example base64
+ * <p>TODO: read: decide how binary content (pdf, image) is returned in JSON, for example base64
  * with an added {@code contentEncoding} field.
  *
  * @param content the document content

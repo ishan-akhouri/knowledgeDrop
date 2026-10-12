@@ -5,7 +5,7 @@ import java.util.UUID;
 /**
  * A chunk returned by one retrieval mode.
  *
- * <p>TODO(compare): fix the chunk ID format, for example {@code <documentId>:<chunkIndex>}.
+ * <p>TODO: compare: fix the chunk ID format, for example {@code <documentId>:<chunkIndex>}.
  *
  * @param chunkId identifier of the chunk
  * @param documentId ID of the source document

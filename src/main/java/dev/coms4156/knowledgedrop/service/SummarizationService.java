@@ -23,10 +23,10 @@ public class SummarizationService {
    * @return the summary and the number of chunks used
    */
   public SummarizeResponse summarize(ClientRecord client, SummarizeRequest request) {
-    // TODO(summarize): verify the document belongs to the client and its status is ready;
+    // TODO: summarize: verify the document belongs to the client and its status is ready;
     //   otherwise return an error with a reason (missing, still processing, or failed).
-    // TODO(summarize): retrieve the document's chunks in order.
-    // TODO(summarize): for long documents, summarize groups of chunks with an LLM first, then
+    // TODO: summarize: retrieve the document's chunks in order.
+    // TODO: summarize: for long documents, summarize groups of chunks with an LLM first, then
     //   combine the partial summaries into a final summary (map-reduce). Length defaults to short.
     throw ApiException.notImplemented("POST /knowledgeDrop/summarize");
   }

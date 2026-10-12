@@ -18,7 +18,7 @@ public interface LlmClient {
    */
   String complete(String systemPrompt, String userPrompt);
 
-  // TODO(llm): add a timeout and a retry policy (provider calls fail). Surface failures as an
+  // TODO: llm: add a timeout and a retry policy (provider calls fail). Surface failures as an
   //   ApiException so the controller returns a clear error instead of a stack trace.
 }
 

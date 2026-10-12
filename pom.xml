@@ -26,16 +26,15 @@
     <checkstyle.version>12.3.1</checkstyle.version>
     <maven-pmd.version>3.28.0</maven-pmd.version>
 
-    <!--
-      Quality gates. Checkstyle and PMD report violations without failing the build by default.
-      To enforce them (recommended once the team has a clean run), set:
-        quality.failOnViolation = true
-        quality.checkstyle.severity = warning
-      Raise jacoco.line.coverage.min (0.00 - 1.00) the same way.
+     <!--
+      Quality gates, enforced. The build fails on any Checkstyle or PMD violation, and when
+      line coverage drops below jacoco.line.coverage.min (0.00 - 1.00).
+      Coverage is a ratchet: raise the minimum as features and tests land, never lower it.
+      Target: 0.85 by project completion.
     -->
-    <quality.failOnViolation>false</quality.failOnViolation>
-    <quality.checkstyle.severity>error</quality.checkstyle.severity>
-    <jacoco.line.coverage.min>0.00</jacoco.line.coverage.min>
+    <quality.failOnViolation>true</quality.failOnViolation>
+    <quality.checkstyle.severity>warning</quality.checkstyle.severity>
+    <jacoco.line.coverage.min>0.50</jacoco.line.coverage.min>
   </properties>
 
   <dependencies>

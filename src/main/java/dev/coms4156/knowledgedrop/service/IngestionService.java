@@ -21,13 +21,13 @@ public class IngestionService {
    */
   @Async("ingestionExecutor")
   public void ingest(UUID documentId) {
-    // TODO(ingestion): extract text: direct read for text files, PDF text extraction for pdf (for
+    // TODO: ingestion: extract text: direct read for text files, PDF text extraction for pdf (for
     //   example Apache PDFBox), OCR for images (for example Tess4J). Keep page numbers.
-    // TODO(ingestion): split the text into chunks using knowledgedrop.ingestion.* settings.
-    // TODO(ingestion) [DEFERRED: embedding provider undecided]: create an embedding per chunk and
-    //   insert it into Redis.
-    // TODO(ingestion): index each chunk in Elasticsearch for BM25 keyword search.
-    // TODO(ingestion): set status = ready, or failed with a reason if any step throws.
+    // TODO: ingestion: split the text into chunks using knowledgedrop.ingestion.* settings.
+    // TODO: ingestion [DEFERRED: embedding provider undecided]: create an embedding per chunk
+    //   and insert it into the vector store.
+    // TODO: ingestion: index each chunk in Elasticsearch for BM25 keyword search.
+    // TODO: ingestion: set status = ready, or failed with a reason if any step throws.
     throw ApiException.notImplemented("document ingestion pipeline");
   }
 
@@ -37,7 +37,7 @@ public class IngestionService {
    * @param documentId the document whose chunks should be deleted
    */
   public void deleteChunks(UUID documentId) {
-    // TODO(update, delete, clientDrop): delete all chunk embeddings (Redis) and chunk entries
+    // TODO: update, delete, clientDrop: delete all chunk embeddings (Redis) and chunk entries
     //   (Elasticsearch) belonging to documentId.
     throw ApiException.notImplemented("chunk deletion");
   }

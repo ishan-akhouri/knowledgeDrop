@@ -14,7 +14,7 @@ import org.springframework.web.multipart.MultipartFile;
 /**
  * Document management: create, update, read, delete, and list.
  *
- * <p>TODO(documents): inject DocumentRepository, IngestionService, and a file-storage component
+ * <p>TODO: documents: inject DocumentRepository, IngestionService, and a file-storage component
  * once they exist. Every lookup must be scoped to the calling client's documents.
  */
 @Service
@@ -30,11 +30,11 @@ public class DocumentService {
    */
   public DocumentStatusResponse create(
       ClientRecord client, CreateDocumentRequest metadata, MultipartFile file) {
-    // TODO(create): validate: type via DocumentType.fromValue (400 if unsupported), exactly one of
+    // TODO: create: validate: type via DocumentType.fromValue (400 if unsupported), exactly one of
     //   file / metadata.text(), and content not empty (400). Reject a duplicate name for this
     //   client (409).
-    // TODO(create): store the original bytes and create a DocumentRecord (status = processing).
-    // TODO(create): kick off IngestionService.ingest(documentId) in the background and return the
+    // TODO: create: store the original bytes and create a DocumentRecord (status = processing).
+    // TODO: create: kick off IngestionService.ingest(documentId) in the background and return the
     //   document ID with status processing right away.
     throw ApiException.notImplemented("POST /knowledgeDrop/create");
   }
@@ -50,11 +50,11 @@ public class DocumentService {
    */
   public DocumentStatusResponse update(
       ClientRecord client, DocumentRef ref, String text, MultipartFile file) {
-    // TODO(update): locate the document and verify it belongs to the client (404 / not owned).
-    // TODO(update): require exactly one of file / text, not empty (400).
-    // TODO(update): delete the existing chunks from Redis and Elasticsearch
+    // TODO: update: locate the document and verify it belongs to the client (404 / not owned).
+    // TODO: update: require exactly one of file / text, not empty (400).
+    // TODO: update: delete the existing chunks from Redis and Elasticsearch
     //   (IngestionService.deleteChunks).
-    // TODO(update): store the new content, set status = processing, re-run ingestion.
+    // TODO: update: store the new content, set status = processing, re-run ingestion.
     throw ApiException.notImplemented("PUT /knowledgeDrop/update");
   }
 
@@ -66,8 +66,8 @@ public class DocumentService {
    * @return content, document ID, filename, type, upload time, and status
    */
   public DocumentReadResponse read(ClientRecord client, DocumentRef ref) {
-    // TODO(read): locate the document, verify ownership, return 404 with a reason if missing.
-    // TODO(read): load the stored content from file storage and map to DocumentReadResponse.
+    // TODO: read: locate the document, verify ownership, return 404 with a reason if missing.
+    // TODO: read: load the stored content from file storage and map to DocumentReadResponse.
     throw ApiException.notImplemented("GET /knowledgeDrop/read");
   }
 
@@ -79,8 +79,8 @@ public class DocumentService {
    * @return confirmation message
    */
   public MessageResponse delete(ClientRecord client, DocumentRef ref) {
-    // TODO(delete): locate the document and verify ownership.
-    // TODO(delete): delete the stored file, the Redis chunk embeddings, the Elasticsearch
+    // TODO: delete: locate the document and verify ownership.
+    // TODO: delete: delete the stored file, the Redis chunk embeddings, the Elasticsearch
     //   entries, and finally the document record.
     throw ApiException.notImplemented("DELETE /knowledgeDrop/delete");
   }
@@ -96,8 +96,8 @@ public class DocumentService {
    */
   public List<DocumentSummary> list(
       ClientRecord client, String status, Integer limit, Integer offset) {
-    // TODO(list): parse status via DocumentStatus.fromValue; apply defaults for limit/offset.
-    // TODO(list): query DocumentRepository (findByOwnerId / findByOwnerIdAndStatus). The
+    // TODO: list: parse status via DocumentStatus.fromValue; apply defaults for limit/offset.
+    // TODO: list: query DocumentRepository (findByOwnerId / findByOwnerIdAndStatus). The
     //   repository is page-based, so convert limit/offset into a Pageable.
     throw ApiException.notImplemented("GET /knowledgeDrop/list");
   }
