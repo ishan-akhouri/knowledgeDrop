@@ -9,15 +9,14 @@ import org.springframework.stereotype.Service;
 public class HealthService {
 
   /**
-   * Pings Redis and Elasticsearch.
+   * Pings Elasticsearch (keyword index and vector store).
    *
-   * @return the status of each dependency and the overall status
+   * @return the status of the dependency and the overall status
    */
   public HealthResponse check() {
-    // TODO: health: ping Redis (for example via StringRedisTemplate / RedisConnectionFactory).
     // TODO: health: ping Elasticsearch (for example ElasticsearchClient.ping()).
     // TODO: health: never throw: report "down" for a dependency that cannot be reached. Overall
-    //   status is HealthResponse.UP only if both are up.
+    //   status is HealthResponse.UP only if Elasticsearch is up.
     throw ApiException.notImplemented("GET /knowledgeDrop/health");
   }
 }

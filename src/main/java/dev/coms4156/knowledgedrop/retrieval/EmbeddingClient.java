@@ -30,7 +30,8 @@ public interface EmbeddingClient {
   List<float[]> embedAll(List<String> texts);
 
   /**
-   * The vector length this provider returns. The Redis index must be created with the same value.
+   * The vector length this provider returns. The Elasticsearch {@code dense_vector} mapping must
+   * use the same value for {@code dims}.
    *
    * @return the number of dimensions
    */

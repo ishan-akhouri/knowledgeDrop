@@ -137,9 +137,9 @@ class EndpointTodoTests {
   // ---- GET /knowledgeDrop/health
   @Test
   @Disabled("TODO(health)")
-  void health_bothDependenciesUp_returns200() {}
+  void health_elasticsearchUp_returns200() {}
 
   @Test
   @Disabled("TODO(health)")
-  void health_eitherDependencyDown_returns503() {}
+  void health_elasticsearchDown_returns503() {}
 }

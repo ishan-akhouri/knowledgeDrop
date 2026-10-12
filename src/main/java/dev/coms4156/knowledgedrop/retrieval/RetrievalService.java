@@ -27,7 +27,7 @@ public class RetrievalService {
    * config, or construct it here from KnowledgeDropProperties).
    *
    * @param embeddings turns query text into a vector
-   * @param vectorStore Redis vector search
+   * @param vectorStore Elasticsearch kNN vector search
    * @param keywordIndex Elasticsearch BM25 search
    * @param rrf merges the two ranked lists
    */

@@ -8,7 +8,7 @@ import java.util.UUID;
  * <p>TODO: retrieval: align the fields with {@code api.dto.ScoredChunk} so the services can map
  * between them without losing information (document ID, filename, page, snippet, score).
  *
- * @param chunkId stable ID of the chunk (the same ID in Redis and Elasticsearch)
+ * @param chunkId stable ID of the chunk (the same ID in the vector and keyword results)
  * @param documentId the document the chunk belongs to
  * @param page page number, or 0 when the source has no pages
  * @param text the chunk text, used for snippets and as LLM context
