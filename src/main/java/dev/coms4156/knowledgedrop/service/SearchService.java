@@ -31,8 +31,8 @@ public class SearchService {
   public CompareResponse compare(ClientRecord client, CompareRequest request) {
     // TODO: compare: if the client has no ready documents, return an error with a reason.
     // TODO: compare: scope every search to the client's documents.
-    // TODO: compare: run vector search (Redis), keyword search (Elasticsearch BM25), and hybrid
-    //   (both lists merged with RRF); record rank and score per chunk per mode.
+    // TODO: compare: run vector search (Elasticsearch kNN), keyword search (Elasticsearch BM25),
+    //   and hybrid (both lists merged with RRF); record rank and score per chunk per mode.
     // TODO: compare: build the overlap summary (which chunks appear in more than one mode).
     throw ApiException.notImplemented("POST /knowledgeDrop/compare");
   }

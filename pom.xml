@@ -59,13 +59,7 @@
       <scope>runtime</scope>
     </dependency>
 
-    <!-- Redis: chunk embeddings (vector search) -->
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-data-redis</artifactId>
-    </dependency>
-
-    <!-- Elasticsearch: keyword index (BM25) -->
+    <!-- Elasticsearch: keyword index (BM25) and semantic vector store (dense_vector kNN) -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-data-elasticsearch</artifactId>
