@@ -120,11 +120,6 @@ class EndpointTodoTests {
   @Disabled("TODO(eval)")
   void eval_labelsReferenceDocumentsNotOwned_returnsError() {}
 
-  // ---- reciprocal rank fusion
-  @Test
-  @Disabled("TODO(retrieval)")
-  void rrf_mergesTwoRankedListsUsingReciprocalRankFusion() {}
-
   // ---- POST /knowledgeDrop/summarize
   @Test
   @Disabled("TODO(summarize)")
