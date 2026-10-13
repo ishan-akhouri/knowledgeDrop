@@ -56,6 +56,9 @@ public class DocumentRecord {
   @Column(name = "uploaded_at", nullable = false)
   private Instant uploadedAt;
 
+  @Column(nullable = false, columnDefinition = "boolean default false")
+  private boolean deleted;
+
   /** Required by JPA. */
   protected DocumentRecord() {}
 
@@ -99,6 +102,15 @@ public class DocumentRecord {
         reason != null && reason.length() > MAX_REASON_LENGTH
             ? reason.substring(0, MAX_REASON_LENGTH)
             : reason;
+  }
+
+  /** Soft-deletes the record while retaining its content and metadata. */
+  public void markDeleted() {
+    this.deleted = true;
+  }
+
+  public boolean isDeleted() {
+    return deleted;
   }
 
   public UUID getId() {

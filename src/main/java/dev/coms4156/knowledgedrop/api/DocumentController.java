@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -28,13 +29,14 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * Document management endpoints. All are TODO: the controller wiring, parameters, and status codes
+ * Document management endpoints. The controller wiring, parameters, and status codes
  * are in place; the logic lives in {@link DocumentService}.
  *
  * <p>Create and update take {@code multipart/form-data} with two parts: a JSON {@code metadata}
  * part (content type {@code application/json}) and the document itself as a binary {@code file}
- * part. Read and delete identify the document by the {@code documentId} or {@code documentName}
- * query parameter; update takes the same two fields in its metadata part.
+ * part. Read identifies the document by the {@code documentId} or {@code documentName}
+ * query parameter; update takes the same two fields in its metadata part. Delete uses the
+ * {@code documentId} or {@code documentTitle} header.
  */
 @RestController
 @RequestMapping("/knowledgeDrop")
@@ -80,13 +82,13 @@ public class DocumentController {
     return documentService.read(client, DocumentRef.of(documentId, documentName));
   }
 
-  /** Deletes a document and all of its chunks. TODO(delete). */
+  /** Soft-deletes a document owned by the authenticated caller, by ID or title header. */
   @DeleteMapping("/delete")
   public MessageResponse delete(
       @RequestAttribute(AuthInterceptor.CLIENT_ATTRIBUTE) ClientRecord client,
-      @RequestParam(value = "documentId", required = false) UUID documentId,
-      @RequestParam(value = "documentName", required = false) String documentName) {
-    return documentService.delete(client, DocumentRef.of(documentId, documentName));
+      @RequestHeader(value = "documentId", required = false) UUID documentId,
+      @RequestHeader(value = "documentTitle", required = false) String documentTitle) {
+    return documentService.delete(client, DocumentRef.of(documentId, documentTitle));
   }
 
   /** Lists the caller's documents, optionally filtered and paginated. TODO(list). */

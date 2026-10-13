@@ -175,7 +175,7 @@ class ApiAuthIntegrationTest {
     mockMvc
         .perform(
             delete("/knowledgeDrop/delete")
-                .param("documentId", "not-a-uuid")
+                .header("documentId", "not-a-uuid")
                 .header(HttpHeaders.AUTHORIZATION, bearer(token)))
         .andExpect(status().isBadRequest());
   }
