@@ -8,7 +8,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
@@ -20,13 +19,12 @@ import java.util.UUID;
  * text and embeddings live in Elasticsearch (keyword index and vector store), keyed by this
  * record's ID.
  *
- * <p>Document names are unique per client so that "document ID or document name" lookups are
- * unambiguous.
+ * <p>Document names are unique per client among non-deleted documents so that "document ID or
+ * document name" lookups are unambiguous. Because deletes are soft ({@code deletedAt}), this is
+ * not a database constraint; queries must filter out deleted records.
  */
 @Entity
-@Table(
-    name = "documents",
-    uniqueConstraints = @UniqueConstraint(columnNames = {"owner_id", "name"}))
+@Table(name = "documents")
 public class DocumentRecord {
 
   private static final int MAX_REASON_LENGTH = 1000;
@@ -142,7 +140,8 @@ public class DocumentRecord {
 
   /**
    * Records the size and SHA-1 hash of the document content.
-   * SHA-1 produces a 160 bit digest. 8 bytes
+   *
+   * <p>SHA-1 produces a 160-bit (20-byte) digest, stored as 40 lowercase hex characters.
    *
    * @param content document bytes
    */
