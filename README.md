@@ -57,6 +57,41 @@ flowchart TB
 
 All API traffic uses REST with JSON request and response bodies.
 
+## Database Schema
+
+PostgreSQL stores two tables: `clients` for registered API clients and `documents` for uploaded document metadata. One client can own zero or many documents; each document records one owner's ID.
+
+```mermaid
+erDiagram
+    clients ||..o{ documents : "owns (logical relationship)"
+
+    clients {
+        uuid id PK "Generated UUID"
+        varchar name UK "Required; unique client name"
+        varchar token_hash UK "Required; unique SHA-256 token hash"
+        timestamptz created_at "Required; registration time"
+    }
+
+    documents {
+        uuid id PK "Generated UUID"
+        uuid owner_id "Required; refers to clients.id logically"
+        varchar name "Required; original filename"
+        varchar doc_type "Required; MIME type, up to 127 characters"
+        varchar status "Required; PROCESSING, READY, or FAILED"
+        varchar failure_reason "Optional; up to 1000 characters"
+        bigint file_bytes "Content size in bytes"
+        varchar content_hash "Optional; 40-character SHA-1 hex digest"
+        timestamptz uploaded_at "Required; upload time"
+        timestamptz deleted_at "Optional; null means not deleted"
+    }
+```
+
+- **Keys and ownership:** `PK` = primary key; `UK` = unique column. The ownership relationship is logical: `owner_id` has no declared foreign key or cascading deletion.
+- **Document names:** uniqueness per owner among non-deleted documents must be enforced by the application; there is no database unique constraint on `(owner_id, name)`.
+- **Soft deletion:** `deleted_at IS NULL` identifies non-deleted records. Queries must apply this filter explicitly; ingestion `status` is independent.
+- **Storage:** PostgreSQL holds metadata, not file contents. Chunk text and embeddings live in Elasticsearch, keyed by document ID.
+- **Schema source:** [ClientRecord](src/main/java/dev/coms4156/knowledgedrop/model/ClientRecord.java) and [DocumentRecord](src/main/java/dev/coms4156/knowledgedrop/model/DocumentRecord.java) define the mappings. [application.yml](src/main/resources/application.yml) enables `ddl-auto: update` at startup; obsolete columns or constraints may remain in existing databases.
+
 ## Conventions
 
 - **Authentication:** the client token returned by `registerClient` is sent as `Authorization: Bearer <token>` on every endpoint except `registerClient` and `health`. Invalid or missing tokens return HTTP 401. Only a SHA-256 hash of the token is stored.
