@@ -6,7 +6,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 /**
- * The ingestion pipeline shared by create and update.
+ * The ingestion pipeline used by create, including when create replaces an existing document.
  *
  * <p>Runs on the {@code ingestionExecutor} thread pool so create can return immediately with
  * status {@code processing}.
@@ -37,8 +37,9 @@ public class IngestionService {
    * @param documentId the document whose chunks should be deleted
    */
   public void deleteChunks(UUID documentId) {
-    // TODO: update, delete, clientDrop: delete all chunk embeddings (vector store) and chunk
-    //   entries (keyword index) in Elasticsearch belonging to documentId.
+    // TODO: create (replacing a document), delete, clientDrop: delete all chunk embeddings
+    //   (vector store) and chunk entries (keyword index) in Elasticsearch belonging to
+    //   documentId.
     throw ApiException.notImplemented("chunk deletion");
   }
 }

@@ -1,6 +1,5 @@
 package dev.coms4156.knowledgedrop.service;
 
-import dev.coms4156.knowledgedrop.api.dto.CreateDocumentRequest;
 import dev.coms4156.knowledgedrop.api.dto.DocumentReadResponse;
 import dev.coms4156.knowledgedrop.api.dto.DocumentStatusResponse;
 import dev.coms4156.knowledgedrop.api.dto.DocumentSummary;
@@ -12,7 +11,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * Document management: create, update, read, delete, and list.
+ * Document management: create (which also replaces an existing document of the same name), read,
+ * delete, and list.
  *
  * <p>TODO: documents: inject DocumentRepository, IngestionService, and a file-storage component
  * once they exist. Every lookup must be scoped to the calling client's documents.
@@ -23,39 +23,29 @@ public class DocumentService {
   /**
    * Stores a document and starts ingesting it.
    *
+   * <p>The document name is the file's original filename and the document type is the file's
+   * content type. If the client already has a non-deleted document with that name, its content is
+   * replaced and re-ingested under the same document ID.
+   *
    * @param client the authenticated caller
-   * @param metadata name, type, and optional raw text (the JSON part of the request)
-   * @param file the uploaded binary file part, or null if {@code metadata.text()} is used
+   * @param file the uploaded binary file part
    * @return the document ID and its current status
    */
-  public DocumentStatusResponse create(
-      ClientRecord client, CreateDocumentRequest metadata, MultipartFile file) {
-    // TODO: create: validate: type is an approved MIME type (400 if unsupported), exactly one of
-    //   file / metadata.text(), and content not empty (400). Reject a duplicate name for this
-    //   client (409).
-    // TODO: create: store the original bytes and create a DocumentRecord (status = processing).
+  public DocumentStatusResponse create(ClientRecord client, MultipartFile file) {
+    // TODO: create: name = file.getOriginalFilename(); strip any directory path (for example
+    //   Paths.get(name).getFileName()) and return 400 if it is null or blank or longer than 255.
+    // TODO: create: type = file.getContentType(); if it is missing or application/octet-stream,
+    //   infer it from the filename extension. Return 400 if the type is not an approved MIME
+    //   type, or if the file is empty.
+    // TODO: create: look up a non-deleted document (deletedAt is null) with this name for this
+    //   client. If one exists, replace it: keep the same document ID, call
+    //   IngestionService.deleteChunks, store the new content, and set status = processing.
+    //   Otherwise create a new DocumentRecord (status = processing).
+    // TODO: create: store the original bytes, then compute their size and SHA-1 hash with
+    //   fingerprint(file) and record them with DocumentRecord.recordContent(bytes, sha1Hex).
     // TODO: create: kick off IngestionService.ingest(documentId) in the background and return the
     //   document ID with status processing right away.
     throw ApiException.notImplemented("POST /knowledgeDrop/create");
-  }
-
-  /**
-   * Replaces a document's content and re-runs ingestion, keeping the same document ID.
-   *
-   * @param client the authenticated caller
-   * @param ref the document to update (by ID or name)
-   * @param text new raw text, or null if {@code file} is used
-   * @param file new uploaded binary file part, or null if {@code text} is used
-   * @return the document ID and its current status
-   */
-  public DocumentStatusResponse update(
-      ClientRecord client, DocumentRef ref, String text, MultipartFile file) {
-    // TODO: update: locate the document and verify it belongs to the client (404 / not owned).
-    // TODO: update: require exactly one of file / text, not empty (400).
-    // TODO: update: delete the existing chunks and embeddings from Elasticsearch
-    //   (IngestionService.deleteChunks).
-    // TODO: update: store the new content, set status = processing, re-run ingestion.
-    throw ApiException.notImplemented("PUT /knowledgeDrop/update");
   }
 
   /**

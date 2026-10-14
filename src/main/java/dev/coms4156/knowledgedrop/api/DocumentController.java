@@ -1,16 +1,13 @@
 package dev.coms4156.knowledgedrop.api;
 
-import dev.coms4156.knowledgedrop.api.dto.CreateDocumentRequest;
 import dev.coms4156.knowledgedrop.api.dto.DocumentReadResponse;
 import dev.coms4156.knowledgedrop.api.dto.DocumentStatusResponse;
 import dev.coms4156.knowledgedrop.api.dto.DocumentSummary;
 import dev.coms4156.knowledgedrop.api.dto.MessageResponse;
-import dev.coms4156.knowledgedrop.api.dto.UpdateDocumentRequest;
 import dev.coms4156.knowledgedrop.model.ClientRecord;
 import dev.coms4156.knowledgedrop.security.AuthInterceptor;
 import dev.coms4156.knowledgedrop.service.DocumentRef;
 import dev.coms4156.knowledgedrop.service.DocumentService;
-import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -19,7 +16,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -31,10 +27,11 @@ import org.springframework.web.multipart.MultipartFile;
  * Document management endpoints. All are TODO: the controller wiring, parameters, and status codes
  * are in place; the logic lives in {@link DocumentService}.
  *
- * <p>Create and update take {@code multipart/form-data} with two parts: a JSON {@code metadata}
- * part (content type {@code application/json}) and the document itself as a binary {@code file}
- * part. Read and delete identify the document by the {@code documentId} or {@code documentName}
- * query parameter; update takes the same two fields in its metadata part.
+ * <p>Create takes {@code multipart/form-data} with a single binary {@code file} part; the document
+ * name is the file's original filename and its type is the file's content type. If the client
+ * already has a non-deleted document with that name, create replaces its content and re-ingests
+ * it. Read and delete identify the document by the {@code documentId} or {@code documentName}
+ * query parameter.
  */
 @RestController
 @RequestMapping("/knowledgeDrop")
@@ -51,24 +48,16 @@ public class DocumentController {
     this.documentService = documentService;
   }
 
-  /** Uploads a document (JSON metadata + binary file) and starts ingestion. TODO(create). */
+  /**
+   * Uploads a document (a single binary file part) and starts ingestion, replacing the content of
+   * an existing document with the same name. TODO(create).
+   */
   @PostMapping(path = "/create", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   public ResponseEntity<DocumentStatusResponse> create(
       @RequestAttribute(AuthInterceptor.CLIENT_ATTRIBUTE) ClientRecord client,
-      @Valid @RequestPart("metadata") CreateDocumentRequest metadata,
-      @RequestPart(value = "file", required = false) MultipartFile file) {
-    DocumentStatusResponse body = documentService.create(client, metadata, file);
+      @RequestPart("file") MultipartFile file) {
+    DocumentStatusResponse body = documentService.create(client, file);
     return ResponseEntity.status(HttpStatus.ACCEPTED).body(body);
-  }
-
-  /** Replaces a document's content (JSON metadata + binary file); re-ingests it. TODO(update). */
-  @PutMapping(path = "/update", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-  public DocumentStatusResponse update(
-      @RequestAttribute(AuthInterceptor.CLIENT_ATTRIBUTE) ClientRecord client,
-      @RequestPart("metadata") UpdateDocumentRequest metadata,
-      @RequestPart(value = "file", required = false) MultipartFile file) {
-    DocumentRef ref = DocumentRef.of(metadata.documentId(), metadata.documentName());
-    return documentService.update(client, ref, metadata.text(), file);
   }
 
   /** Returns a document's content and metadata. TODO(read). */

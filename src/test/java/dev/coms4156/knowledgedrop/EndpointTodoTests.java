@@ -25,7 +25,23 @@ class EndpointTodoTests {
 
   @Test
   @Disabled("TODO(create)")
-  void create_duplicateNameForSameClient_returns409() {}
+  void create_missingOrBlankFilename_returns400() {}
+
+  @Test
+  @Disabled("TODO(create)")
+  void create_usesOriginalFilenameAsDocumentName() {}
+
+  @Test
+  @Disabled("TODO(create)")
+  void create_sameNameAsExistingDocument_replacesChunksAndKeepsDocumentId() {}
+
+  @Test
+  @Disabled("TODO(create)")
+  void create_sameNameAsSoftDeletedDocument_createsNewDocument() {}
+
+  @Test
+  @Disabled("TODO(create)")
+  void create_sameNameForDifferentClient_createsSeparateDocument() {}
 
   @Test
   @Disabled("TODO(ingestion)")
@@ -34,15 +50,6 @@ class EndpointTodoTests {
   @Test
   @Disabled("TODO(ingestion)")
   void ingestion_success_setsStatusReadyAndIndexesChunks() {}
-
-  // ---- PUT /knowledgeDrop/update
-  @Test
-  @Disabled("TODO(update)")
-  void update_replacesChunksAndKeepsDocumentId() {}
-
-  @Test
-  @Disabled("TODO(update)")
-  void update_documentNotOwnedByClient_returnsError() {}
 
   // ---- GET /knowledgeDrop/read
   @Test
