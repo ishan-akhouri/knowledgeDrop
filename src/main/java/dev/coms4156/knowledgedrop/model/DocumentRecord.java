@@ -41,7 +41,7 @@ public class DocumentRecord {
   @Column(nullable = false)
   private String name;
 
-  @Column(name = "doc_type", nullable = false, length = 255)
+  @Column(name = "doc_type", nullable = false, length = 127)
   private String type;
 
   @Enumerated(EnumType.STRING)
