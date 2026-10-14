@@ -8,11 +8,10 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
-import java.util.HexFormat;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * Service-side record of an uploaded document: owner, name, type, upload time, and status. Chunk
@@ -28,6 +27,9 @@ import java.util.UUID;
 public class DocumentRecord {
 
   private static final int MAX_REASON_LENGTH = 1000;
+
+  /** A SHA-1 digest as 40 lowercase hexadecimal characters. */
+  private static final Pattern SHA1_HEX = Pattern.compile("[0-9a-f]{40}");
 
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
@@ -51,7 +53,7 @@ public class DocumentRecord {
 
   /** Size of the stored content in bytes. */
   @Column(name = "file_bytes")
-  private int fileBytes;
+  private long fileBytes;
 
   /** SHA-1 hash of the stored content, encoded as lowercase hexadecimal. */
   @Column(name = "content_hash", length = 40)
@@ -130,7 +132,7 @@ public class DocumentRecord {
     return failureReason;
   }
 
-  public int getFileBytes() {
+  public long getFileBytes() {
     return fileBytes;
   }
 
@@ -143,16 +145,28 @@ public class DocumentRecord {
    *
    * <p>SHA-1 produces a 160-bit (20-byte) digest, stored as 40 lowercase hex characters.
    *
-   * @param content document bytes
+   * <p>The hash is computed by the caller (the service layer, which has access to the uploaded
+   * file); this method only validates and stores the result. Both fields are set together, and
+   * neither is changed if validation fails.
+   *
+   * @param fileBytes size of the content in bytes; must not be negative
+   * @param contentHash SHA-1 of the content as 40 lowercase hex characters
+   * @throws NullPointerException if {@code contentHash} is null
+   * @throws IllegalArgumentException if {@code fileBytes} is negative or {@code contentHash} is
+   *     not 40 lowercase hex characters
    */
-  public void recordContent(byte[] content) {
-    this.fileBytes = content.length;
-    try {
-      this.contentHash =
-          HexFormat.of().formatHex(MessageDigest.getInstance("SHA-1").digest(content));
-    } catch (NoSuchAlgorithmException e) {
-      throw new IllegalStateException("SHA-1 is not available", e);
+  public void recordContent(long fileBytes, String contentHash) {
+    Objects.requireNonNull(contentHash, "contentHash must not be null");
+    if (fileBytes < 0) {
+      throw new IllegalArgumentException("fileBytes must not be negative");
     }
+    if (!SHA1_HEX.matcher(contentHash).matches()) {
+      throw new IllegalArgumentException(
+          "contentHash must be 40 lowercase hexadecimal characters (SHA-1)");
+    }
+
+    this.fileBytes = fileBytes;
+    this.contentHash = contentHash;
   }
 
   public Instant getUploadedAt() {

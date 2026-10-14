@@ -12,7 +12,7 @@ Vector search is strong at meaning (for example, "How do I cancel?" matching a t
 flowchart TB
     C[Client program] -->|REST + JSON<br/>Bearer token| API[Spring Boot API]
 
-    API -->|create / update| Ingest
+    API -->|create| Ingest
     API -->|registerClient / read / list| REC
     API -->|delete / clientDrop| Stores
     API -.->|health<br/>pings Elasticsearch| Stores
@@ -61,8 +61,8 @@ All API traffic uses REST with JSON request and response bodies.
 
 - **Authentication:** the client token returned by `registerClient` is sent as `Authorization: Bearer <token>` on every endpoint except `registerClient` and `health`. Invalid or missing tokens return HTTP 401. Only a SHA-256 hash of the token is stored.
 - **Document status:** each document is `processing` (being ingested), `ready` (searchable), or `failed`. Search, `ask`, `similarity`, and `summarize` only use `ready` documents.
-- **Document names:** a document can be referenced by ID or by name, so names are unique per client. `create` returns HTTP 409 if the client already has a document with that name.
-- **Ingestion pipeline:** `create` and `update` extract text (direct read for text files, text extraction for PDFs, OCR for images, keeping page numbers), split it into chunks, embed each chunk into the Elasticsearch vector store, and index each chunk's text in Elasticsearch for keyword search. Ingestion runs in the background, so `create` and `update` return `202 Accepted` with status `processing`.
+- **Document names:** a document's name is the original filename of the uploaded file. A document can be referenced by ID or by name, so names are unique per client among non-deleted documents. Uploading a file whose name matches one of the client's existing documents replaces that document's content (keeping its document ID) and re-ingests it. `create` returns HTTP 400 if the upload has no filename.
+- **Ingestion pipeline:** `create` extracts text (direct read for text files, text extraction for PDFs, OCR for images, keeping page numbers), splits it into chunks, embeds each chunk into the Elasticsearch vector store, and indexes each chunk's text in Elasticsearch for keyword search. Ingestion runs in the background, so `create` returns `202 Accepted` with status `processing`.
 - **Errors:** always `{"error": "Not Found", "reason": "..."}`.
 
 ## API Reference
@@ -80,8 +80,7 @@ All paths are under `/knowledgeDrop`.
 
 | Method | Endpoint | Inputs | Behavior |
 |---|---|---|---|
-| POST | `/knowledgeDrop/create` | Token, document name, MIME type (for example, `application/pdf` or `text/plain`), content | Stores the file, runs the ingestion pipeline, and returns the document ID and status. Errors on an unsupported type, empty content, or a name the client already uses (409). |
-| PUT | `/knowledgeDrop/update` | Token, document ID or name, new content | Deletes the document's existing chunks and embeddings from Elasticsearch and re-ingests the new content. Keeps the same document ID and sets status to `processing`. |
+| POST | `/knowledgeDrop/create` | Token, file (a multipart `file` part) | Uses the file's original filename as the document name and its content type (for example, `application/pdf` or `text/plain`) as the MIME type. If the client already has a non-deleted document with that name, deletes its existing chunks and embeddings from Elasticsearch, replaces its content, and re-ingests it under the same document ID. Otherwise creates a new document. Stores the file, runs the ingestion pipeline, and returns the document ID and status `processing`. Errors on a missing filename, an unsupported type, or empty content. |
 | GET | `/knowledgeDrop/read` | Token, document ID or name | Returns the content, ID, filename, type, upload time, and status, or HTTP 404. |
 | DELETE | `/knowledgeDrop/delete` | Token, document ID or name | Deletes the stored file, its Elasticsearch chunk entries and embeddings, and the document record. |
 | GET | `/knowledgeDrop/list` | Token, optional `status`, `limit`, `offset` | Returns the client's documents with ID, filename, type, upload time, and status. Returns an empty list if there are none. |
@@ -163,13 +162,12 @@ curl -s -X POST localhost:8080/knowledgeDrop/registerClient \
 TOKEN=<clientToken>
 curl -s localhost:8080/knowledgeDrop/list -H "Authorization: Bearer $TOKEN"
 
-# create: JSON metadata part + binary file part
+# create: a single file part; the document name is the file's name (policy.pdf)
 curl -s -X POST localhost:8080/knowledgeDrop/create -H "Authorization: Bearer $TOKEN" \
-  -F 'metadata={"name":"policy.pdf","type":"application/pdf"};type=application/json' \
-  -F 'file=@policy.pdf;type=application/octet-stream'
+  -F 'file=@policy.pdf;type=application/pdf'
 ```
 
-`create` and `update` use `multipart/form-data`: a `metadata` JSON part (`{"name": "...", "type": "application/pdf|text/plain"}`, optionally `"text"` for raw text) and a `file` part. `update` metadata uses `{"documentId": "..."}` or `{"documentName": "..."}`.
+`create` uses `multipart/form-data` with a binary `file` part. The document name is the file's original filename, and the MIME type is the file's content type (the filename extension is used if the client sends `application/octet-stream`). Uploading again with the same filename replaces that document's content.
 
 ### Implementation status
 
@@ -178,8 +176,7 @@ Endpoint logic that is not built yet is marked with a `TODO:` comment that names
 | Endpoint | Status | Implement in |
 |---|---|---|
 | `POST registerClient` | **Built** (reference implementation) | `ClientService.register` |
-| `POST create` | To do | `DocumentService.create` |
-| `PUT update` | To do | `DocumentService.update` |
+| `POST create` (also replaces a same-name document) | To do | `DocumentService.create` |
 | `GET read` | To do | `DocumentService.read` |
 | `DELETE delete` | To do | `DocumentService.delete` |
 | `GET list` | To do | `DocumentService.list` |
