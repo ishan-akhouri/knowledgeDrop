@@ -20,6 +20,9 @@ public interface DocumentRepository extends JpaRepository<DocumentRecord, UUID> 
   /** Finds a document by name within one client's documents. */
   Optional<DocumentRecord> findByOwnerIdAndName(UUID ownerId, String name);
 
+  /** Finds a client's non-deleted (soft-delete marker unset) document with the given name. */
+  Optional<DocumentRecord> findByOwnerIdAndNameAndDeletedAtIsNull(UUID ownerId, String name);
+
   /** Returns true if the client owns at least one document with this status. */
   boolean existsByOwnerIdAndStatus(UUID ownerId, DocumentStatus status);
 

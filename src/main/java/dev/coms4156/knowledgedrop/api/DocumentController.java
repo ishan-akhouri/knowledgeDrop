@@ -4,12 +4,11 @@ import dev.coms4156.knowledgedrop.api.dto.DocumentReadResponse;
 import dev.coms4156.knowledgedrop.api.dto.DocumentStatusResponse;
 import dev.coms4156.knowledgedrop.api.dto.DocumentSummary;
 import dev.coms4156.knowledgedrop.api.dto.MessageResponse;
+import dev.coms4156.knowledgedrop.exception.ApiException;
 import dev.coms4156.knowledgedrop.model.ClientRecord;
 import dev.coms4156.knowledgedrop.security.AuthInterceptor;
-import dev.coms4156.knowledgedrop.service.DocumentRef;
 import dev.coms4156.knowledgedrop.service.DocumentService;
 import java.util.List;
-import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -30,8 +29,7 @@ import org.springframework.web.multipart.MultipartFile;
  * <p>Create takes {@code multipart/form-data} with a single binary {@code file} part; the document
  * name is the file's original filename and its type is the file's content type. If the client
  * already has a non-deleted document with that name, create replaces its content and re-ingests
- * it. Read and delete identify the document by the {@code documentId} or {@code documentName}
- * query parameter.
+ * it. Read and delete identify the document by the {@code documentName} query parameter.
  *
  * <p>All paths are served under the {@code /knowledgeDrop/document} prefix, for example
  * {@code POST /knowledgeDrop/document/create}.
@@ -63,22 +61,27 @@ public class DocumentController {
     return ResponseEntity.status(HttpStatus.ACCEPTED).body(body);
   }
 
-  /** Returns a document's content and metadata. TODO(read). */
+  /** Returns the content and metadata of the client's non-deleted document. TODO(read). */
   @GetMapping("/read")
   public DocumentReadResponse read(
       @RequestAttribute(AuthInterceptor.CLIENT_ATTRIBUTE) ClientRecord client,
-      @RequestParam(value = "documentId", required = false) UUID documentId,
       @RequestParam(value = "documentName", required = false) String documentName) {
-    return documentService.read(client, DocumentRef.of(documentId, documentName));
+    return documentService.read(client, requireName(documentName));
   }
 
-  /** Deletes a document and all of its chunks. TODO(delete). */
+  /** Soft-deletes the client's document with the given name. TODO(delete). */
   @DeleteMapping("/delete")
   public MessageResponse delete(
       @RequestAttribute(AuthInterceptor.CLIENT_ATTRIBUTE) ClientRecord client,
-      @RequestParam(value = "documentId", required = false) UUID documentId,
       @RequestParam(value = "documentName", required = false) String documentName) {
-    return documentService.delete(client, DocumentRef.of(documentId, documentName));
+    return documentService.delete(client, requireName(documentName));
+  }
+
+  private static String requireName(String documentName) {
+    if (documentName == null || documentName.isBlank()) {
+      throw ApiException.badRequest("documentName is required");
+    }
+    return documentName.trim();
   }
 
   /** Lists the caller's documents, optionally filtered and paginated. TODO(list). */
