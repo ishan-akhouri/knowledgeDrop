@@ -32,9 +32,12 @@ import org.springframework.web.multipart.MultipartFile;
  * already has a non-deleted document with that name, create replaces its content and re-ingests
  * it. Read and delete identify the document by the {@code documentId} or {@code documentName}
  * query parameter.
+ *
+ * <p>All paths are served under the {@code /knowledgeDrop/document} prefix, for example
+ * {@code POST /knowledgeDrop/document/create}.
  */
 @RestController
-@RequestMapping("/knowledgeDrop")
+@RequestMapping("/knowledgeDrop/document")
 public class DocumentController {
 
   private final DocumentService documentService;

@@ -45,7 +45,7 @@ public class DocumentService {
     //   fingerprint(file) and record them with DocumentRecord.recordContent(bytes, sha1Hex).
     // TODO: create: kick off IngestionService.ingest(documentId) in the background and return the
     //   document ID with status processing right away.
-    throw ApiException.notImplemented("POST /knowledgeDrop/create");
+    throw ApiException.notImplemented("POST /knowledgeDrop/document/create");
   }
 
   /**
@@ -58,7 +58,7 @@ public class DocumentService {
   public DocumentReadResponse read(ClientRecord client, DocumentRef ref) {
     // TODO: read: locate the document, verify ownership, return 404 with a reason if missing.
     // TODO: read: load the stored content from file storage and map to DocumentReadResponse.
-    throw ApiException.notImplemented("GET /knowledgeDrop/read");
+    throw ApiException.notImplemented("GET /knowledgeDrop/document/read");
   }
 
   /**
@@ -72,7 +72,7 @@ public class DocumentService {
     // TODO: delete: locate the document and verify ownership.
     // TODO: delete: delete the stored file, the Elasticsearch chunk entries and embeddings, and
     //   finally the document record.
-    throw ApiException.notImplemented("DELETE /knowledgeDrop/delete");
+    throw ApiException.notImplemented("DELETE /knowledgeDrop/document/delete");
   }
 
   /**
@@ -89,6 +89,6 @@ public class DocumentService {
     // TODO: list: parse status via DocumentStatus.fromValue; apply defaults for limit/offset.
     // TODO: list: query DocumentRepository (findByOwnerId / findByOwnerIdAndStatus). The
     //   repository is page-based, so convert limit/offset into a Pageable.
-    throw ApiException.notImplemented("GET /knowledgeDrop/list");
+    throw ApiException.notImplemented("GET /knowledgeDrop/document/list");
   }
 }

@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
  */
 class EndpointTodoTests {
 
-  // ---- POST /knowledgeDrop/create
+  // ---- POST /knowledgeDrop/document/create
   @Test
   @Disabled("TODO(create)")
   void create_validRequest_returnsDocumentIdAndProcessingStatus() {}
@@ -51,7 +51,7 @@ class EndpointTodoTests {
   @Disabled("TODO(ingestion)")
   void ingestion_success_setsStatusReadyAndIndexesChunks() {}
 
-  // ---- GET /knowledgeDrop/read
+  // ---- GET /knowledgeDrop/document/read
   @Test
   @Disabled("TODO(read)")
   void read_existingDocument_returnsContentAndMetadata() {}
@@ -60,7 +60,7 @@ class EndpointTodoTests {
   @Disabled("TODO(read)")
   void read_unknownDocument_returns404() {}
 
-  // ---- DELETE /knowledgeDrop/delete
+  // ---- DELETE /knowledgeDrop/document/delete
   @Test
   @Disabled("TODO(delete)")
   void delete_removesFileChunksAndRecord() {}
@@ -69,7 +69,7 @@ class EndpointTodoTests {
   @Disabled("TODO(delete)")
   void delete_documentNotOwnedByClient_returnsError() {}
 
-  // ---- GET /knowledgeDrop/list
+  // ---- GET /knowledgeDrop/document/list
   @Test
   @Disabled("TODO(list)")
   void list_appliesStatusFilterAndPagination() {}
