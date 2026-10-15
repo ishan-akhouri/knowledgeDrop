@@ -83,8 +83,24 @@ All paths are under `/knowledgeDrop`.
 | POST | `/knowledgeDrop/create` | Token, document name, type (`pdf`, `text`, `image`), content | Stores the file, runs the ingestion pipeline, and returns the document ID and status. Errors on an unsupported type, empty content, or a name the client already uses (409). |
 | PUT | `/knowledgeDrop/update` | Token, document ID or name, new content | Deletes the document's existing chunks and embeddings from Elasticsearch and re-ingests the new content. Keeps the same document ID and sets status to `processing`. |
 | GET | `/knowledgeDrop/read` | Token, document ID or name | Returns the content, ID, filename, type, upload time, and status, or HTTP 404. |
-| DELETE | `/knowledgeDrop/delete` | Token, document ID or name | Deletes the stored file, its Elasticsearch chunk entries and embeddings, and the document record. |
+| DELETE | `/knowledgeDrop/delete` | Bearer token; exactly one header: `documentId` or `documentTitle` | Sets `deleted=true` on an owned record. Title matching is case insensitive. Retains the record, file, and chunks. |
 | GET | `/knowledgeDrop/list` | Token, optional `status`, `limit`, `offset` | Returns the client's documents with ID, filename, type, upload time, and status. Returns an empty list if there are none. |
+
+To soft-delete a document by ID:
+
+```bash
+curl -X DELETE http://localhost:8080/knowledgeDrop/delete \
+  -H "Authorization: Bearer <client-token>" \
+  -H "documentId: <document-uuid>"
+```
+
+Alternatively, replace the `documentId` header with `documentTitle: Meeting Notes`.
+Success returns HTTP 200 with `{"message":"Document deleted successfully"}`.
+Missing/both selectors or a malformed ID return 400; missing/invalid tokens return 401.
+Unknown, unowned, or already deleted documents return 404.
+If multiple active titles match ignoring case, the endpoint returns 409; use the ID instead.
+The soft-delete flag is independent of ingestion status. Read/list/retrieval implementations
+remain TODO and must exclude deleted documents when implemented.
 
 ### Question Answering and Similarity
 
@@ -181,7 +197,7 @@ Endpoint logic that is not built yet is marked with a `TODO:` comment that names
 | `POST create` | To do | `DocumentService.create` |
 | `PUT update` | To do | `DocumentService.update` |
 | `GET read` | To do | `DocumentService.read` |
-| `DELETE delete` | To do | `DocumentService.delete` |
+| `DELETE /knowledgeDrop/delete` | Implemented | `DocumentService.delete` (soft delete) |
 | `GET list` | To do | `DocumentService.list` |
 | `DELETE clientDrop` | To do | `ClientService.drop` |
 | `GET health` | To do | `HealthService.check` |

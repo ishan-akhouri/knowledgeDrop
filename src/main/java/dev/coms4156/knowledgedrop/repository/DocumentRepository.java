@@ -2,6 +2,7 @@ package dev.coms4156.knowledgedrop.repository;
 
 import dev.coms4156.knowledgedrop.model.DocumentRecord;
 import dev.coms4156.knowledgedrop.model.DocumentStatus;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -19,6 +20,9 @@ public interface DocumentRepository extends JpaRepository<DocumentRecord, UUID> 
 
   /** Finds a document by name within one client's documents. */
   Optional<DocumentRecord> findByOwnerIdAndName(UUID ownerId, String name);
+
+  /** Finds active documents by case-insensitive title within one client. */
+  List<DocumentRecord> findByOwnerIdAndNameIgnoreCaseAndDeletedFalse(UUID ownerId, String name);
 
   /** Returns true if the client owns at least one document with this status. */
   boolean existsByOwnerIdAndStatus(UUID ownerId, DocumentStatus status);

@@ -53,15 +53,6 @@ class EndpointTodoTests {
   @Disabled("TODO(read)")
   void read_unknownDocument_returns404() {}
 
-  // ---- DELETE /knowledgeDrop/delete
-  @Test
-  @Disabled("TODO(delete)")
-  void delete_removesFileChunksAndRecord() {}
-
-  @Test
-  @Disabled("TODO(delete)")
-  void delete_documentNotOwnedByClient_returnsError() {}
-
   // ---- GET /knowledgeDrop/list
   @Test
   @Disabled("TODO(list)")

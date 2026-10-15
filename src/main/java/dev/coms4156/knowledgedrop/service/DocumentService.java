@@ -7,18 +7,32 @@ import dev.coms4156.knowledgedrop.api.dto.DocumentSummary;
 import dev.coms4156.knowledgedrop.api.dto.MessageResponse;
 import dev.coms4156.knowledgedrop.exception.ApiException;
 import dev.coms4156.knowledgedrop.model.ClientRecord;
+import dev.coms4156.knowledgedrop.model.DocumentRecord;
+import dev.coms4156.knowledgedrop.repository.DocumentRepository;
 import java.util.List;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
  * Document management: create, update, read, delete, and list.
  *
- * <p>TODO: documents: inject DocumentRepository, IngestionService, and a file-storage component
+ * <p>TODO: documents: inject IngestionService and a file-storage component
  * once they exist. Every lookup must be scoped to the calling client's documents.
  */
 @Service
 public class DocumentService {
+
+  private final DocumentRepository documentRepository;
+
+  /**
+   * Creates the document service.
+   *
+   * @param documentRepository document persistence
+   */
+  public DocumentService(DocumentRepository documentRepository) {
+    this.documentRepository = documentRepository;
+  }
 
   /**
    * Stores a document and starts ingesting it.
@@ -72,17 +86,34 @@ public class DocumentService {
   }
 
   /**
-   * Deletes a document and everything derived from it.
+   * Soft-deletes an owned document, preserving its file, chunks, and metadata.
    *
    * @param client the authenticated caller
    * @param ref the document to delete
    * @return confirmation message
    */
+  @Transactional
   public MessageResponse delete(ClientRecord client, DocumentRef ref) {
-    // TODO: delete: locate the document and verify ownership.
-    // TODO: delete: delete the stored file, the Elasticsearch chunk entries and embeddings, and
-    //   finally the document record.
-    throw ApiException.notImplemented("DELETE /knowledgeDrop/delete");
+    DocumentRecord document;
+    if (ref.id() != null) {
+      document = documentRepository.findByIdAndOwnerId(ref.id(), client.getId())
+          .filter(record -> !record.isDeleted())
+          .orElseThrow(() -> ApiException.notFound("Document not found"));
+    } else {
+      List<DocumentRecord> matches =
+          documentRepository.findByOwnerIdAndNameIgnoreCaseAndDeletedFalse(
+              client.getId(), ref.name());
+      if (matches.isEmpty()) {
+        throw ApiException.notFound("Document not found");
+      }
+      if (matches.size() > 1) {
+        throw ApiException.conflict("Multiple documents match this title; use documentId");
+      }
+      document = matches.get(0);
+    }
+    document.markDeleted();
+    documentRepository.save(document);
+    return new MessageResponse("Document deleted successfully");
   }
 
   /**
