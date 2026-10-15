@@ -51,27 +51,35 @@ public class DocumentService {
   /**
    * Returns a document's stored content and metadata.
    *
+   * <p>Only the client's non-deleted (deletedAt is null) document with this name is returned.
+   *
    * @param client the authenticated caller
-   * @param ref the document to read
+   * @param name the document name (the original filename it was created with)
    * @return content, document ID, filename, type, upload time, and status
    */
-  public DocumentReadResponse read(ClientRecord client, DocumentRef ref) {
-    // TODO: read: locate the document, verify ownership, return 404 with a reason if missing.
+  public DocumentReadResponse read(ClientRecord client, String name) {
+    // TODO: read: look up the non-deleted document for this client and name via
+    //   DocumentRepository.findByOwnerIdAndNameAndDeletedAtIsNull(client.getId(), name); return 404
+    //   with a reason if missing (soft-deleted documents count as missing).
     // TODO: read: load the stored content from file storage and map to DocumentReadResponse.
     throw ApiException.notImplemented("GET /knowledgeDrop/document/read");
   }
 
   /**
-   * Deletes a document and everything derived from it.
+   * Soft-deletes a document: the record is kept but marked as deleted.
    *
    * @param client the authenticated caller
-   * @param ref the document to delete
+   * @param name the document name (the original filename it was created with)
    * @return confirmation message
    */
-  public MessageResponse delete(ClientRecord client, DocumentRef ref) {
-    // TODO: delete: locate the document and verify ownership.
-    // TODO: delete: delete the stored file, the Elasticsearch chunk entries and embeddings, and
-    //   finally the document record.
+  public MessageResponse delete(ClientRecord client, String name) {
+    // TODO: delete: look up the non-deleted document for this client and name via
+    //   DocumentRepository.findByOwnerIdAndNameAndDeletedAtIsNull(client.getId(), name); return 404
+    //   with a reason if missing.
+    // TODO: delete: mark it deleted with setDeletedAt(Instant.now()) and save the record. The
+    //   name then becomes free for create to reuse with a new document.
+    // TODO: delete: remove the document's Elasticsearch chunk entries and embeddings so a deleted
+    //   document never appears in search results.
     throw ApiException.notImplemented("DELETE /knowledgeDrop/document/delete");
   }
 

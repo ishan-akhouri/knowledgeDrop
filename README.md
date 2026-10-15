@@ -96,7 +96,7 @@ erDiagram
 
 - **Authentication:** the client token returned by `registerClient` is sent as `Authorization: Bearer <token>` on every endpoint except `registerClient` and `health`. Invalid or missing tokens return HTTP 401. Only a SHA-256 hash of the token is stored.
 - **Document status:** each document is `processing` (being ingested), `ready` (searchable), or `failed`. Search, `ask`, `similarity`, and `summarize` only use `ready` documents.
-- **Document names:** a document's name is the original filename of the uploaded file. A document can be referenced by ID or by name, so names are unique per client among non-deleted documents. Uploading a file whose name matches one of the client's existing documents replaces that document's content (keeping its document ID) and re-ingests it. `create` returns HTTP 400 if the upload has no filename.
+- **Document names:** a document's name is the original filename of the uploaded file. `read` and `delete` identify a document by its name (the `documentName` query parameter), so names are unique per client among non-deleted documents. Soft-deleted documents are ignored by name lookups, so a deleted name can be reused by a later `create`. Uploading a file whose name matches one of the client's existing documents replaces that document's content (keeping its document ID) and re-ingests it. `create` returns HTTP 400 if the upload has no filename.
 - **Ingestion pipeline:** `create` extracts text (direct read for text files, text extraction for PDFs, OCR for images, keeping page numbers), splits it into chunks, embeds each chunk into the Elasticsearch vector store, and indexes each chunk's text in Elasticsearch for keyword search. Ingestion runs in the background, so `create` returns `202 Accepted` with status `processing`.
 - **Errors:** always `{"error": "Not Found", "reason": "..."}`.
 
@@ -116,8 +116,8 @@ All paths are under `/knowledgeDrop`. Document management endpoints are grouped 
 | Method | Endpoint | Inputs | Behavior |
 |---|---|---|---|
 | POST | `/knowledgeDrop/document/create` | Token, file (a multipart `file` part) | Uses the file's original filename as the document name and its content type (for example, `application/pdf` or `text/plain`) as the MIME type. If the client already has a non-deleted document with that name, deletes its existing chunks and embeddings from Elasticsearch, replaces its content, and re-ingests it under the same document ID. Otherwise creates a new document. Stores the file, runs the ingestion pipeline, and returns the document ID and status `processing`. Errors on a missing filename, an unsupported type, or empty content. |
-| GET | `/knowledgeDrop/document/read` | Token, document ID or name | Returns the content, ID, filename, type, upload time, and status, or HTTP 404. |
-| DELETE | `/knowledgeDrop/document/delete` | Token, document ID or name | Deletes the stored file, its Elasticsearch chunk entries and embeddings, and the document record. |
+| GET | `/knowledgeDrop/document/read` | Token, `documentName` | Looks up the client's non-deleted document with that name. Returns the content, ID, filename, type, upload time, and status, or HTTP 404 if there is none (including if it was deleted). Returns HTTP 400 if `documentName` is missing or blank. |
+| DELETE | `/knowledgeDrop/document/delete` | Token, `documentName` | Soft-deletes the client's non-deleted document with that name by setting `deleted_at` on its record, and removes its Elasticsearch chunk entries and embeddings so it no longer appears in search. Returns HTTP 404 if there is none, or HTTP 400 if `documentName` is missing or blank. |
 | GET | `/knowledgeDrop/document/list` | Token, optional `status`, `limit`, `offset` | Returns the client's documents with ID, filename, type, upload time, and status. Returns an empty list if there are none. |
 
 ### Question Answering and Similarity

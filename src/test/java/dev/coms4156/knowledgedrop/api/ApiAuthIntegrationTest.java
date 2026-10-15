@@ -164,7 +164,7 @@ class ApiAuthIntegrationTest {
   // ------------------------------------------------------------ request validation
 
   @Test
-  void read_withoutIdOrName_returns400() throws Exception {
+  void read_withoutName_returns400() throws Exception {
     String token = registerAndGetToken();
 
     mockMvc
@@ -176,15 +176,16 @@ class ApiAuthIntegrationTest {
   }
 
   @Test
-  void delete_malformedDocumentId_returns400() throws Exception {
+  void delete_blankName_returns400() throws Exception {
     String token = registerAndGetToken();
 
     mockMvc
         .perform(
             delete("/knowledgeDrop/document/delete")
-                .param("documentId", "not-a-uuid")
+                .param("documentName", "  ")
                 .header(HttpHeaders.AUTHORIZATION, bearer(token)))
-        .andExpect(status().isBadRequest());
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.reason").isNotEmpty());
   }
 
   @Test
