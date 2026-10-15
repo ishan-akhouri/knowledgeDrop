@@ -120,7 +120,7 @@ class ApiAuthIntegrationTest {
   @Test
   void protectedEndpoint_missingToken_returns401() throws Exception {
     mockMvc
-        .perform(get("/knowledgeDrop/list"))
+        .perform(get("/knowledgeDrop/document/list"))
         .andExpect(status().isUnauthorized())
         .andExpect(jsonPath("$.reason").isNotEmpty());
   }
@@ -128,14 +128,18 @@ class ApiAuthIntegrationTest {
   @Test
   void protectedEndpoint_invalidToken_returns401() throws Exception {
     mockMvc
-        .perform(get("/knowledgeDrop/list").header(HttpHeaders.AUTHORIZATION, bearer("nope")))
+        .perform(
+            get("/knowledgeDrop/document/list")
+                .header(HttpHeaders.AUTHORIZATION, bearer("nope")))
         .andExpect(status().isUnauthorized());
   }
 
   @Test
   void protectedEndpoint_wrongAuthScheme_returns401() throws Exception {
     mockMvc
-        .perform(get("/knowledgeDrop/list").header(HttpHeaders.AUTHORIZATION, "Basic abc123"))
+        .perform(
+            get("/knowledgeDrop/document/list")
+                .header(HttpHeaders.AUTHORIZATION, "Basic abc123"))
         .andExpect(status().isUnauthorized());
   }
 
@@ -144,7 +148,9 @@ class ApiAuthIntegrationTest {
     String token = registerAndGetToken();
 
     mockMvc
-        .perform(get("/knowledgeDrop/list").header(HttpHeaders.AUTHORIZATION, bearer(token)))
+        .perform(
+            get("/knowledgeDrop/document/list")
+                .header(HttpHeaders.AUTHORIZATION, bearer(token)))
         .andExpect(result -> assertNotEquals(401, result.getResponse().getStatus()));
   }
 
@@ -162,7 +168,9 @@ class ApiAuthIntegrationTest {
     String token = registerAndGetToken();
 
     mockMvc
-        .perform(get("/knowledgeDrop/read").header(HttpHeaders.AUTHORIZATION, bearer(token)))
+        .perform(
+            get("/knowledgeDrop/document/read")
+                .header(HttpHeaders.AUTHORIZATION, bearer(token)))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.reason").isNotEmpty());
   }
@@ -173,7 +181,7 @@ class ApiAuthIntegrationTest {
 
     mockMvc
         .perform(
-            delete("/knowledgeDrop/delete")
+            delete("/knowledgeDrop/document/delete")
                 .param("documentId", "not-a-uuid")
                 .header(HttpHeaders.AUTHORIZATION, bearer(token)))
         .andExpect(status().isBadRequest());
@@ -216,7 +224,7 @@ class ApiAuthIntegrationTest {
 
     mockMvc
         .perform(
-            multipart("/knowledgeDrop/create")
+            multipart("/knowledgeDrop/document/create")
                 .file(binaryFilePart("hello world"))
                 .header(HttpHeaders.AUTHORIZATION, bearer(token)))
         .andExpect(ApiAuthIntegrationTest::assertNotRejectedBeforeService);
@@ -228,7 +236,8 @@ class ApiAuthIntegrationTest {
 
     mockMvc
         .perform(
-            multipart("/knowledgeDrop/create").header(HttpHeaders.AUTHORIZATION, bearer(token)))
+            multipart("/knowledgeDrop/document/create")
+                .header(HttpHeaders.AUTHORIZATION, bearer(token)))
         .andExpect(status().isBadRequest());
   }
 
@@ -236,7 +245,7 @@ class ApiAuthIntegrationTest {
   void create_withoutToken_returns401() throws Exception {
     mockMvc
         .perform(
-            multipart("/knowledgeDrop/create").file(binaryFilePart("hello")))
+            multipart("/knowledgeDrop/document/create").file(binaryFilePart("hello")))
         .andExpect(status().isUnauthorized());
   }
 }

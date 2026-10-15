@@ -102,7 +102,7 @@ erDiagram
 
 ## API Reference
 
-All paths are under `/knowledgeDrop`.
+All paths are under `/knowledgeDrop`. Document management endpoints are grouped under the `/knowledgeDrop/document` prefix (for example `POST /knowledgeDrop/document/create`).
 
 ### Client Registration
 
@@ -115,10 +115,10 @@ All paths are under `/knowledgeDrop`.
 
 | Method | Endpoint | Inputs | Behavior |
 |---|---|---|---|
-| POST | `/knowledgeDrop/create` | Token, file (a multipart `file` part) | Uses the file's original filename as the document name and its content type (for example, `application/pdf` or `text/plain`) as the MIME type. If the client already has a non-deleted document with that name, deletes its existing chunks and embeddings from Elasticsearch, replaces its content, and re-ingests it under the same document ID. Otherwise creates a new document. Stores the file, runs the ingestion pipeline, and returns the document ID and status `processing`. Errors on a missing filename, an unsupported type, or empty content. |
-| GET | `/knowledgeDrop/read` | Token, document ID or name | Returns the content, ID, filename, type, upload time, and status, or HTTP 404. |
-| DELETE | `/knowledgeDrop/delete` | Token, document ID or name | Deletes the stored file, its Elasticsearch chunk entries and embeddings, and the document record. |
-| GET | `/knowledgeDrop/list` | Token, optional `status`, `limit`, `offset` | Returns the client's documents with ID, filename, type, upload time, and status. Returns an empty list if there are none. |
+| POST | `/knowledgeDrop/document/create` | Token, file (a multipart `file` part) | Uses the file's original filename as the document name and its content type (for example, `application/pdf` or `text/plain`) as the MIME type. If the client already has a non-deleted document with that name, deletes its existing chunks and embeddings from Elasticsearch, replaces its content, and re-ingests it under the same document ID. Otherwise creates a new document. Stores the file, runs the ingestion pipeline, and returns the document ID and status `processing`. Errors on a missing filename, an unsupported type, or empty content. |
+| GET | `/knowledgeDrop/document/read` | Token, document ID or name | Returns the content, ID, filename, type, upload time, and status, or HTTP 404. |
+| DELETE | `/knowledgeDrop/document/delete` | Token, document ID or name | Deletes the stored file, its Elasticsearch chunk entries and embeddings, and the document record. |
+| GET | `/knowledgeDrop/document/list` | Token, optional `status`, `limit`, `offset` | Returns the client's documents with ID, filename, type, upload time, and status. Returns an empty list if there are none. |
 
 ### Question Answering and Similarity
 
@@ -195,10 +195,10 @@ curl -s -X POST localhost:8080/knowledgeDrop/registerClient \
 # => {"clientId":"...","clientToken":"..."}   (token is shown once)
 
 TOKEN=<clientToken>
-curl -s localhost:8080/knowledgeDrop/list -H "Authorization: Bearer $TOKEN"
+curl -s localhost:8080/knowledgeDrop/document/list -H "Authorization: Bearer $TOKEN"
 
 # create: a single file part; the document name is the file's name (policy.pdf)
-curl -s -X POST localhost:8080/knowledgeDrop/create -H "Authorization: Bearer $TOKEN" \
+curl -s -X POST localhost:8080/knowledgeDrop/document/create -H "Authorization: Bearer $TOKEN" \
   -F 'file=@policy.pdf;type=application/pdf'
 ```
 
@@ -211,10 +211,10 @@ Endpoint logic that is not built yet is marked with a `TODO:` comment that names
 | Endpoint | Status | Implement in |
 |---|---|---|
 | `POST registerClient` | **Built** (reference implementation) | `ClientService.register` |
-| `POST create` (also replaces a same-name document) | To do | `DocumentService.create` |
-| `GET read` | To do | `DocumentService.read` |
-| `DELETE delete` | To do | `DocumentService.delete` |
-| `GET list` | To do | `DocumentService.list` |
+| `POST document/create` (also replaces a same-name document) | To do | `DocumentService.create` |
+| `GET document/read` | To do | `DocumentService.read` |
+| `DELETE document/delete` | To do | `DocumentService.delete` |
+| `GET document/list` | To do | `DocumentService.list` |
 | `DELETE clientDrop` | To do | `ClientService.drop` |
 | `GET health` | To do | `HealthService.check` |
 | Ingestion pipeline (extract, chunk, keyword index) | To do | `IngestionService` |
