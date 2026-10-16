@@ -64,8 +64,7 @@ public class RetrievalService {
    * @return top k chunks by BM25 score
    */
   public List<RankedChunk> keyword(UUID clientId, String query, int k) {
-    // TODO: retrieval: call keywordIndex.search with the candidate pool, cut to k.
-    throw new UnsupportedOperationException("keyword search");
+    return keywordIndex.search(clientId, query, k);
   }
 
   /**
