@@ -68,7 +68,6 @@ public class DocumentService {
     String fileName;
     String fileType;
     long fileSize;
-    InputStream fileInputStream;
     String sha1Hash;
     DocumentRecord newDocument;
     try {
@@ -76,10 +75,21 @@ public class DocumentService {
       fileName = file.getOriginalFilename();
       fileType = file.getContentType();
       fileSize = file.getSize();
-      fileInputStream = file.getInputStream();
     } catch (Exception e) {
       throw ApiException.badRequest(
           "Failed to extract information from request: " + e.getMessage());
+    }
+    try (InputStream in = file.getInputStream()) {
+      fileStorage.save(client.getId(), fileName, in);
+    } catch (Exception e) {
+      throw ApiException.internalServerError(
+          "Failed to save file content: " + e.getMessage());
+    }
+    try (InputStream in = file.getInputStream()) {
+      sha1Hash = computeSha1Hash(in);
+    } catch (Exception e) {
+      throw ApiException.internalServerError(
+          "Failed to process file content: " + e.getMessage());
     }
     try {
       Optional<DocumentRecord> existing =
@@ -92,12 +102,7 @@ public class DocumentService {
       throw ApiException.internalServerError(
           "Failed to check for existing documents: " + e.getMessage());
     }
-    try (InputStream in = fileInputStream) {
-      sha1Hash = computeSha1Hash(in);
-    } catch (Exception e) {
-      throw ApiException.internalServerError(
-          "Failed to process file content: " + e.getMessage());
-    }
+
     try {
       newDocument = new DocumentRecord(clientId, fileName, fileType, fileSize, sha1Hash);
       documentRepository.save(newDocument);
@@ -105,12 +110,7 @@ public class DocumentService {
       throw ApiException.internalServerError(
           "Failed to create document record: " + e.getMessage());
     }
-    try (InputStream in = file.getInputStream()) {
-      fileStorage.save(client.getId(), fileName, in);
-    } catch (Exception e) {
-      throw ApiException.internalServerError(
-          "Failed to save file content: " + e.getMessage());
-    }
+
 
     ingestionService.ingest(newDocument.getId());
     return new DocumentStatusResponse(newDocument.getId(), newDocument.getStatus());

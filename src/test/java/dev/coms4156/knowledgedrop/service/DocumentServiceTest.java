@@ -203,14 +203,14 @@ class DocumentServiceTest {
   }
 
   @Test
-  void create_savesFileAfterRecordAndBeforeIngestion() throws Exception {
+  void create_savesFileBeforeRecordAndIngestion() throws Exception {
     saveAssignsIds();
 
     DocumentStatusResponse response = documentService.create(client, textFile("notes.txt", "hi"));
 
-    InOrder order = inOrder(documentRepository, fileStorage, ingestionService);
-    order.verify(documentRepository).save(any(DocumentRecord.class));
+    InOrder order = inOrder(fileStorage, documentRepository, ingestionService);
     order.verify(fileStorage).save(eq(clientId), eq("notes.txt"), any(InputStream.class));
+    order.verify(documentRepository).save(any(DocumentRecord.class));
     order.verify(ingestionService).ingest(response.documentId());
   }
 
@@ -247,8 +247,8 @@ class DocumentServiceTest {
   }
 
   @Test
-  void create_fileStorageFails_throwsInternalServerErrorAndSkipsIngestion() throws Exception {
-    saveAssignsIds();
+  void create_fileStorageFails_throwsInternalServerErrorAndLeavesRecordsUntouched()
+      throws Exception {
     when(fileStorage.save(any(UUID.class), any(String.class), any(InputStream.class)))
         .thenThrow(new IOException("disk full"));
     MockMultipartFile file = textFile("notes.txt", "hello");
@@ -256,13 +256,12 @@ class DocumentServiceTest {
     ApiException ex = assertThrows(ApiException.class, () -> documentService.create(client, file));
 
     assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatus());
-    verifyNoInteractions(ingestionService);
+    verifyNoInteractions(documentRepository, ingestionService);
   }
 
   @Test
-  void create_fileStorageRejectsFileName_throwsInternalServerErrorAndSkipsIngestion()
+  void create_fileStorageRejectsFileName_throwsInternalServerErrorAndLeavesRecordsUntouched()
       throws Exception {
-    saveAssignsIds();
     when(fileStorage.save(any(UUID.class), any(String.class), any(InputStream.class)))
         .thenThrow(new IllegalArgumentException("Invalid file name"));
     MockMultipartFile file = textFile("../evil.txt", "hello");
@@ -270,7 +269,7 @@ class DocumentServiceTest {
     ApiException ex = assertThrows(ApiException.class, () -> documentService.create(client, file));
 
     assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatus());
-    verifyNoInteractions(ingestionService);
+    verifyNoInteractions(documentRepository, ingestionService);
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -338,7 +337,6 @@ class DocumentServiceTest {
   @Test
   void create_realStorage_fileNameEscapingClientDirectory_isRejectedAndNothingWritten(
       @TempDir Path dataDir) throws Exception {
-    saveAssignsIds();
     DocumentService service = serviceWithRealStorage(dataDir);
     MockMultipartFile file = textFile("../../escaped.txt", "evil");
 
@@ -347,7 +345,7 @@ class DocumentServiceTest {
     assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatus());
     assertFalse(Files.exists(dataDir.resolve("escaped.txt")));
     assertFalse(Files.exists(dataDir.getParent().resolve("escaped.txt")));
-    verifyNoInteractions(ingestionService);
+    verifyNoInteractions(documentRepository, ingestionService);
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -398,7 +396,7 @@ class DocumentServiceTest {
   }
 
   @Test
-  void create_fileStreamCannotBeOpened_throwsBadRequest() throws IOException {
+  void create_fileStreamCannotBeOpened_throwsInternalServerError() throws IOException {
     MultipartFile file = org.mockito.Mockito.mock(MultipartFile.class);
     when(file.getOriginalFilename()).thenReturn("notes.txt");
     when(file.getContentType()).thenReturn("text/plain");
@@ -407,7 +405,7 @@ class DocumentServiceTest {
 
     ApiException ex = assertThrows(ApiException.class, () -> documentService.create(client, file));
 
-    assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
+    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatus());
     verifyNoInteractions(documentRepository, ingestionService, fileStorage);
   }
 
@@ -421,7 +419,7 @@ class DocumentServiceTest {
 
     assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatus());
     verify(documentRepository, never()).save(any());
-    verifyNoInteractions(ingestionService, fileStorage);
+    verifyNoInteractions(ingestionService);
   }
 
   @Test
@@ -442,8 +440,7 @@ class DocumentServiceTest {
     ApiException ex = assertThrows(ApiException.class, () -> documentService.create(client, file));
 
     assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatus());
-    verify(documentRepository, never()).save(any());
-    verifyNoInteractions(ingestionService, fileStorage);
+    verifyNoInteractions(documentRepository, ingestionService);
   }
 
   @Test
@@ -455,7 +452,7 @@ class DocumentServiceTest {
     ApiException ex = assertThrows(ApiException.class, () -> documentService.create(client, file));
 
     assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatus());
-    verifyNoInteractions(ingestionService, fileStorage);
+    verifyNoInteractions(ingestionService);
   }
 
   // ---------------------------------------------------------------------------------------------
