@@ -4,11 +4,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 /**
- * JSON body for client registration.
+ * JSON body for registering a client system.
  *
- * @param firstName client first name
- * @param lastName client last name
+ * @param name name of the client system
  */
-public record RegisterClientRequest(
-    @NotBlank @Size(max = 255) String firstName,
-    @NotBlank @Size(max = 255) String lastName) {}
+public record RegisterClientRequest(@NotBlank @Size(max = 255) String name) {}

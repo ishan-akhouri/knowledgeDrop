@@ -61,7 +61,7 @@ class ApiAuthIntegrationTest {
   private MvcResult register(String name) throws Exception {
     return mockMvc
         .perform(post("/knowledgeDrop/client/register").contentType(MediaType.APPLICATION_JSON)
-            .content("{\"firstName\":\"" + name + "\",\"lastName\":\"Last\"}"))
+            .content("{\"name\":\"" + name + "\"}"))
         .andExpect(status().isCreated())
         .andReturn();
   }
@@ -79,7 +79,7 @@ class ApiAuthIntegrationTest {
   void registerClient_returnsCredentialsAndPersistsRecord() throws Exception {
     MvcResult result = mockMvc
         .perform(post("/knowledgeDrop/client/register").contentType(MediaType.APPLICATION_JSON)
-            .content("{\"firstName\":\" Ada \",\"lastName\":\" Lovelace \"}"))
+            .content("{\"name\":\" billing-system \"}"))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.clientId").isNotEmpty())
         .andExpect(jsonPath("$.clientToken").isNotEmpty())
@@ -89,8 +89,7 @@ class ApiAuthIntegrationTest {
     UUID id = UUID.fromString(JsonPath.read(body, "$.clientId"));
     final String token = JsonPath.read(body, "$.clientToken");
     ClientRecord stored = clientRepository.findById(id).orElseThrow();
-    assertEquals("Ada", stored.getFirstName());
-    assertEquals("Lovelace", stored.getLastName());
+    assertEquals("billing-system", stored.getName());
     assertNull(stored.getDeletedAt());
     assertNotNull(stored.getCreatedAt());
     assertEquals(TokenUtils.hash(token), stored.getTokenHash());
@@ -99,29 +98,26 @@ class ApiAuthIntegrationTest {
 
   @Test
   void registerClient_sameNames_generateDistinctCredentials() throws Exception {
-    String first = register("Ada").getResponse().getContentAsString();
-    String second = register("Ada").getResponse().getContentAsString();
+    String first = register("billing-system").getResponse().getContentAsString();
+    String second = register("billing-system").getResponse().getContentAsString();
     assertNotEquals((String) JsonPath.read(first, "$.clientId"),
         (String) JsonPath.read(second, "$.clientId"));
     assertNotEquals((String) JsonPath.read(first, "$.clientToken"),
         (String) JsonPath.read(second, "$.clientToken"));
   }
 
+  /** Verifies null, blank, and oversized system names cannot create a database record. */
   @ParameterizedTest
-  @ValueSource(strings = {"firstName", "lastName"})
-  void registerClient_missingOrInvalidField_returns400(String field) throws Exception {
-    String other = field.equals("firstName") ? "lastName" : "firstName";
+  @ValueSource(strings = {"null", "\"\"", "\"  \"", "\"\\t\"", "\"\u2003\""})
+  void registerClient_invalidName_returns400(String nameJson) throws Exception {
     long count = clientRepository.count();
     mockMvc.perform(post("/knowledgeDrop/client/register").contentType(MediaType.APPLICATION_JSON)
-            .content("{\"" + other + "\":\"Valid\"}"))
+            .content("{\"name\":" + nameJson + "}"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.reason").isNotEmpty());
-    for (String invalid : List.of("null", "\"\"", "\"  \"", "\"" + "a".repeat(256) + "\"")) {
-      mockMvc.perform(post("/knowledgeDrop/client/register").contentType(MediaType.APPLICATION_JSON)
-              .content("{\"" + other + "\":\"Valid\",\"" + field + "\":" + invalid + "}"))
-          .andExpect(status().isBadRequest())
-          .andExpect(jsonPath("$.reason").isNotEmpty());
-    }
+    mockMvc.perform(post("/knowledgeDrop/client/register").contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"" + "a".repeat(256) + "\"}"))
+        .andExpect(status().isBadRequest());
     assertEquals(count, clientRepository.count());
   }
 
@@ -135,10 +131,9 @@ class ApiAuthIntegrationTest {
   }
 
   @Test
-  void registerClient_maximumLengthNames_succeed() throws Exception {
+  void registerClient_maximumLengthName_succeeds() throws Exception {
     mockMvc.perform(post("/knowledgeDrop/client/register").contentType(MediaType.APPLICATION_JSON)
-            .content("{\"firstName\":\"" + "a".repeat(255)
-                + "\",\"lastName\":\"" + "b".repeat(255) + "\"}"))
+            .content("{\"name\":\"" + "a".repeat(255) + "\"}"))
         .andExpect(status().isCreated());
   }
 

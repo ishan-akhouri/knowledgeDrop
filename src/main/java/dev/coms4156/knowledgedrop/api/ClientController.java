@@ -38,7 +38,7 @@ public class ClientController {
   @PostMapping("/register")
   public ResponseEntity<RegisterClientResponse> registerClient(
       @Valid @RequestBody RegisterClientRequest request) {
-    RegisterClientResponse body = clientService.register(request.firstName(), request.lastName());
+    RegisterClientResponse body = clientService.register(request.name());
     return ResponseEntity.status(HttpStatus.CREATED).body(body);
   }
 

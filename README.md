@@ -55,7 +55,7 @@ flowchart TB
 - **LLM:** generates answers from retrieved context and produces summaries.
 - **Scoping:** every query is filtered by client, so one client never sees another client's data.
 
-The API uses REST and JSON responses. Registration takes names in a JSON request body.
+The API uses REST and JSON responses. Registration takes a system name in a JSON request body.
 
 ## Database Schema
 
@@ -67,8 +67,7 @@ erDiagram
 
     clients {
         uuid id PK "Generated UUID"
-        varchar first_name "Required; client first name"
-        varchar last_name "Required; client last name"
+        varchar name "Required; client system name"
         timestamptz deleted_at "Optional; null means not deleted"
         varchar token_hash UK "Required; unique SHA-256 token hash"
         timestamptz created_at "Required; registration time"
@@ -110,19 +109,19 @@ All paths are under `/knowledgeDrop`. Document management endpoints are grouped 
 
 | Method | Endpoint | Inputs | Behavior |
 |---|---|---|---|
-| POST | `/knowledgeDrop/client/register` | JSON body with required `firstName` and `lastName` fields | Returns HTTP 201 with `clientId` (UUID) and `clientToken`. Stores only the SHA-256 token hash. Names may repeat; invalid or missing fields return HTTP 400. |
+| POST | `/knowledgeDrop/client/register` | JSON body with a required `name` field | Returns HTTP 201 with `clientId` (UUID) and `clientToken`. Stores only the SHA-256 token hash. Names may repeat; invalid or missing fields return HTTP 400. |
 | DELETE | `/knowledgeDrop/client/{clientId}` | Bearer token, client UUID in the path | Only the token owner can delete itself (otherwise HTTP 403). Returns HTTP 200 with a confirmation; soft-deletes the client and all owned documents in one transaction using the same timestamp. |
 
 Registration replaces the former `/knowledgeDrop/registerClient` JSON-body endpoint.
-Both name fields must be nonblank and at most 255 characters; surrounding whitespace is removed.
+The system name must be nonblank and at most 255 characters; surrounding whitespace is removed.
 The returned token contains 256 random bits and is shown only in the registration response.
 New clients have `deleted_at = NULL`; deleted clients cannot authenticate.
 Deleting a client sets `deleted_at` on every owned document, including previously deleted
 documents, to the client deletion timestamp. Rows, token hashes, files, and Elasticsearch
 data are retained. Subsequent requests using the deleted client’s token return HTTP 401.
 
-Local development data is disposable. If your database still uses the old `clients.name`
-schema or the former `is_active` column, stop the application, run `docker compose down -v` to wipe the PostgreSQL and
+Local development data is disposable. If your database still uses the former `first_name`,
+`last_name`, or `is_active` columns, stop the application and run `docker compose down -v` to wipe the PostgreSQL and
 Elasticsearch data volumes, then run `docker compose up -d` and restart the application.
 Hibernate creates the current schema in the fresh database; no migration is needed.
 
@@ -207,7 +206,7 @@ Never commit `.env`. Add new variables to `.env.example` with a safe placeholder
 ```bash
 curl -s -X POST localhost:8080/knowledgeDrop/client/register \
   -H 'Content-Type: application/json' \
-  -d '{"firstName":"Ada","lastName":"Lovelace"}'
+  -d '{"name":"billing-system"}'
 # => {"clientId":"...","clientToken":"..."}   (token is shown once)
 
 TOKEN=<clientToken>

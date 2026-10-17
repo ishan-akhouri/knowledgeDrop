@@ -42,7 +42,7 @@ class ClientServiceTest {
   @InjectMocks private ClientService clientService;
 
   /**
-   * Verifies registration trims names, creates an active client, and stores only the token hash.
+   * Verifies registration trims the name, creates an active client, and stores only the token hash.
    */
   @Test
   void register_newName_returnsTokenAndStoresOnlyItsHash() {
@@ -55,13 +55,12 @@ class ClientServiceTest {
               return entity;
             });
 
-    final RegisterClientResponse response = clientService.register("  Ada ", " Lovelace  ");
+    final RegisterClientResponse response = clientService.register("  billing-system  ");
 
     ArgumentCaptor<ClientRecord> captor = ArgumentCaptor.forClass(ClientRecord.class);
     verify(clientRepository).saveAndFlush(captor.capture());
     ClientRecord stored = captor.getValue();
-    assertEquals("Ada", stored.getFirstName());
-    assertEquals("Lovelace", stored.getLastName());
+    assertEquals("billing-system", stored.getName());
     assertNull(stored.getDeletedAt());
     assertNotNull(stored.getCreatedAt());
     assertEquals(id, response.clientId());
@@ -74,27 +73,22 @@ class ClientServiceTest {
   @NullAndEmptySource
   @ValueSource(strings = {"  ", "\t", "\u2003"})
   void register_invalidName_rejectsBeforeSaving(String name) {
-    ApiException first = assertThrows(ApiException.class,
-        () -> clientService.register(name, "Lovelace"));
-    ApiException last = assertThrows(ApiException.class,
-        () -> clientService.register("Ada", name));
-    assertEquals(HttpStatus.BAD_REQUEST, first.getStatus());
-    assertEquals(HttpStatus.BAD_REQUEST, last.getStatus());
+    ApiException error = assertThrows(ApiException.class, () -> clientService.register(name));
+    assertEquals(HttpStatus.BAD_REQUEST, error.getStatus());
     verifyNoInteractions(clientRepository);
   }
 
-  /** Verifies either name exceeding 255 characters is rejected before accessing storage. */
+  /** Verifies a name exceeding 255 characters is rejected before accessing storage. */
   @Test
   void register_oversizedName_rejectsBeforeSaving() {
-    assertThrows(ApiException.class, () -> clientService.register("a".repeat(256), "Last"));
-    assertThrows(ApiException.class, () -> clientService.register("First", "b".repeat(256)));
+    assertThrows(ApiException.class, () -> clientService.register("a".repeat(256)));
     verifyNoInteractions(clientRepository);
   }
 
-  /** Verifies a valid token cannot authenticate an deleted client. */
+  /** Verifies a valid token cannot authenticate a deleted client. */
   @Test
   void authenticate_deletedClient_returnsEmpty() {
-    ClientRecord client = new ClientRecord("Ada", "Lovelace", TokenUtils.hash("secret"));
+    ClientRecord client = new ClientRecord("billing-system", TokenUtils.hash("secret"));
     client.setDeletedAt(java.time.Instant.now());
     when(clientRepository.findByTokenHash(TokenUtils.hash("secret")))
         .thenReturn(Optional.of(client));
@@ -104,7 +98,7 @@ class ClientServiceTest {
   /** Verifies authentication hashes the supplied token and returns its active client. */
   @Test
   void authenticate_knownToken_returnsClient() {
-    ClientRecord client = new ClientRecord("Ada", "Lovelace", TokenUtils.hash("secret"));
+    ClientRecord client = new ClientRecord("billing-system", TokenUtils.hash("secret"));
     when(clientRepository.findByTokenHash(TokenUtils.hash("secret")))
         .thenReturn(Optional.of(client));
 
@@ -175,7 +169,7 @@ class ClientServiceTest {
   }
 
   private static ClientRecord clientWithId() {
-    ClientRecord client = new ClientRecord("Ada", "Lovelace", TokenUtils.hash("secret"));
+    ClientRecord client = new ClientRecord("billing-system", TokenUtils.hash("secret"));
     ReflectionTestUtils.setField(client, "id", UUID.randomUUID());
     return client;
   }
