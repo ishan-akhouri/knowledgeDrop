@@ -27,8 +27,8 @@ public class ClientRecord {
   @Column(name = "last_name", nullable = false)
   private String lastName;
 
-  @Column(name = "is_active", nullable = false)
-  private boolean active;
+  @Column(name = "deleted_at")
+  private Instant deletedAt;
 
   @Column(name = "token_hash", nullable = false, unique = true)
   private String tokenHash;
@@ -49,7 +49,6 @@ public class ClientRecord {
   public ClientRecord(String firstName, String lastName, String tokenHash) {
     this.firstName = firstName;
     this.lastName = lastName;
-    this.active = true;
     this.tokenHash = tokenHash;
     this.createdAt = Instant.now();
   }
@@ -66,8 +65,12 @@ public class ClientRecord {
     return lastName;
   }
 
-  public boolean isActive() {
-    return active;
+  public Instant getDeletedAt() {
+    return deletedAt;
+  }
+
+  public void setDeletedAt(Instant deletedAt) {
+    this.deletedAt = deletedAt;
   }
 
   public String getTokenHash() {

@@ -50,7 +50,7 @@ public interface KeywordIndex {
   void deleteByDocument(UUID documentId);
 
   /**
-   * Removes everything a client owns (used by clientDrop).
+   * Removes everything a client owns (reserved for future permanent cleanup).
    *
    * @param clientId the client whose chunks should be removed
    */

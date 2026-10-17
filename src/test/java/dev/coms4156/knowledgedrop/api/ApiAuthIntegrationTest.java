@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -91,7 +91,7 @@ class ApiAuthIntegrationTest {
     ClientRecord stored = clientRepository.findById(id).orElseThrow();
     assertEquals("Ada", stored.getFirstName());
     assertEquals("Lovelace", stored.getLastName());
-    assertTrue(stored.isActive());
+    assertNull(stored.getDeletedAt());
     assertNotNull(stored.getCreatedAt());
     assertEquals(TokenUtils.hash(token), stored.getTokenHash());
     assertNotEquals(token, stored.getTokenHash());
@@ -143,19 +143,6 @@ class ApiAuthIntegrationTest {
   }
 
   // ------------------------------------------------------------ authentication
-
-  @Test
-  void clientDrop_requiresAuthenticationAndReachesService()
-      throws Exception {
-    mockMvc.perform(delete("/knowledgeDrop/client/drop")
-            .param("clientId", UUID.randomUUID().toString()))
-        .andExpect(status().isUnauthorized());
-    String token = registerAndGetToken();
-    mockMvc.perform(delete("/knowledgeDrop/client/drop")
-            .param("clientId", UUID.randomUUID().toString())
-            .header(HttpHeaders.AUTHORIZATION, bearer(token)))
-        .andExpect(status().isNotImplemented());
-  }
 
   @Test
   void protectedEndpoint_missingToken_returns401() throws Exception {

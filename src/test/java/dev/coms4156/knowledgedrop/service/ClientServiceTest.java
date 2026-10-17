@@ -3,6 +3,7 @@ package dev.coms4156.knowledgedrop.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -15,6 +16,7 @@ import dev.coms4156.knowledgedrop.api.dto.RegisterClientResponse;
 import dev.coms4156.knowledgedrop.exception.ApiException;
 import dev.coms4156.knowledgedrop.model.ClientRecord;
 import dev.coms4156.knowledgedrop.repository.ClientRepository;
+import dev.coms4156.knowledgedrop.repository.DocumentRepository;
 import dev.coms4156.knowledgedrop.security.TokenUtils;
 import java.util.Optional;
 import java.util.UUID;
@@ -35,10 +37,13 @@ import org.springframework.test.util.ReflectionTestUtils;
 class ClientServiceTest {
 
   @Mock private ClientRepository clientRepository;
+  @Mock private DocumentRepository documentRepository;
 
   @InjectMocks private ClientService clientService;
 
-  /** Verifies registration trims names, creates an active client, and stores only the token hash. */
+  /**
+   * Verifies registration trims names, creates an active client, and stores only the token hash.
+   */
   @Test
   void register_newName_returnsTokenAndStoresOnlyItsHash() {
     UUID id = UUID.randomUUID();
@@ -57,7 +62,7 @@ class ClientServiceTest {
     ClientRecord stored = captor.getValue();
     assertEquals("Ada", stored.getFirstName());
     assertEquals("Lovelace", stored.getLastName());
-    assertTrue(stored.isActive());
+    assertNull(stored.getDeletedAt());
     assertNotNull(stored.getCreatedAt());
     assertEquals(id, response.clientId());
     assertNotEquals(response.clientToken(), stored.getTokenHash());
@@ -86,11 +91,11 @@ class ClientServiceTest {
     verifyNoInteractions(clientRepository);
   }
 
-  /** Verifies a valid token cannot authenticate an inactive client. */
+  /** Verifies a valid token cannot authenticate an deleted client. */
   @Test
-  void authenticate_inactiveClient_returnsEmpty() {
+  void authenticate_deletedClient_returnsEmpty() {
     ClientRecord client = new ClientRecord("Ada", "Lovelace", TokenUtils.hash("secret"));
-    ReflectionTestUtils.setField(client, "active", false);
+    client.setDeletedAt(java.time.Instant.now());
     when(clientRepository.findByTokenHash(TokenUtils.hash("secret")))
         .thenReturn(Optional.of(client));
     assertTrue(clientService.authenticate("secret").isEmpty());
@@ -117,4 +122,62 @@ class ClientServiceTest {
 
     verifyNoInteractions(clientRepository);
   }
+
+  /** Verifies deleting oneself saves the same timestamp for the client and every owned document. */
+  @Test
+  void delete_self_usesOneTimestamp() {
+    ClientRecord client = clientWithId();
+    when(clientRepository.findByIdForUpdate(client.getId())).thenReturn(Optional.of(client));
+
+    clientService.delete(client, client.getId());
+
+    assertNotNull(client.getDeletedAt());
+    verify(clientRepository).saveAndFlush(client);
+    verify(documentRepository).softDeleteByOwnerId(client.getId(), client.getDeletedAt());
+  }
+
+  /**
+   * Verifies a caller cannot delete another client or access either repository for that request.
+   */
+  @Test
+  void delete_otherClient_returnsForbidden() {
+    ClientRecord client = clientWithId();
+    ApiException error = assertThrows(ApiException.class,
+        () -> clientService.delete(client, UUID.randomUUID()));
+    assertEquals(HttpStatus.FORBIDDEN, error.getStatus());
+    verifyNoInteractions(clientRepository, documentRepository);
+  }
+
+  /**
+   * Verifies a client removed since authentication returns not found without touching documents.
+   */
+  @Test
+  void delete_missingClient_returnsNotFound() {
+    ClientRecord client = clientWithId();
+    when(clientRepository.findByIdForUpdate(client.getId())).thenReturn(Optional.empty());
+    ApiException error = assertThrows(ApiException.class,
+        () -> clientService.delete(client, client.getId()));
+    assertEquals(HttpStatus.NOT_FOUND, error.getStatus());
+    verifyNoInteractions(documentRepository);
+  }
+
+  /** Verifies a concurrent repeat deletion cannot overwrite the original deletion timestamp. */
+  @Test
+  void delete_alreadyDeleted_returnsUnauthorized() {
+    ClientRecord client = clientWithId();
+    client.setDeletedAt(java.time.Instant.EPOCH);
+    when(clientRepository.findByIdForUpdate(client.getId())).thenReturn(Optional.of(client));
+    ApiException error = assertThrows(ApiException.class,
+        () -> clientService.delete(client, client.getId()));
+    assertEquals(HttpStatus.UNAUTHORIZED, error.getStatus());
+    assertEquals(java.time.Instant.EPOCH, client.getDeletedAt());
+    verifyNoInteractions(documentRepository);
+  }
+
+  private static ClientRecord clientWithId() {
+    ClientRecord client = new ClientRecord("Ada", "Lovelace", TokenUtils.hash("secret"));
+    ReflectionTestUtils.setField(client, "id", UUID.randomUUID());
+    return client;
+  }
+
 }

@@ -5,10 +5,15 @@ import dev.coms4156.knowledgedrop.api.dto.RegisterClientResponse;
 import dev.coms4156.knowledgedrop.exception.ApiException;
 import dev.coms4156.knowledgedrop.model.ClientRecord;
 import dev.coms4156.knowledgedrop.repository.ClientRepository;
+import dev.coms4156.knowledgedrop.repository.DocumentRepository;
 import dev.coms4156.knowledgedrop.security.TokenUtils;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Client registration and token authentication.
@@ -20,14 +25,17 @@ import org.springframework.stereotype.Service;
 public class ClientService {
 
   private final ClientRepository clientRepository;
+  private final DocumentRepository documentRepository;
 
   /**
    * Creates the service.
    *
    * @param clientRepository persistence for client records
+   * @param documentRepository persistence for owned documents
    */
-  public ClientService(ClientRepository clientRepository) {
+  public ClientService(ClientRepository clientRepository, DocumentRepository documentRepository) {
     this.clientRepository = clientRepository;
+    this.documentRepository = documentRepository;
   }
 
   /**
@@ -65,22 +73,30 @@ public class ClientService {
       return Optional.empty();
     }
     return clientRepository.findByTokenHash(TokenUtils.hash(token))
-        .filter(ClientRecord::isActive);
+        .filter(client -> client.getDeletedAt() == null);
   }
 
   /**
-   * Deletes a client and all of its data.
+   * Soft-deletes the caller and all owned documents at one timestamp in a single transaction.
    *
    * @param client the authenticated caller
-   * @param clientId the client ID the caller wants to drop
+   * @param clientId the client ID to delete, which must match the caller
    * @return confirmation message
    */
-  public MessageResponse drop(ClientRecord client, UUID clientId) {
-    // TODO: clientDrop: verify clientId equals client.getId(); otherwise throw a 4xx
-    //   "token and client ID do not match".
-    // TODO: clientDrop: delete every document the client owns, including the stored file and the
-    //   Elasticsearch chunk entries and embeddings (reuse the DocumentService delete logic).
-    // TODO: clientDrop: delete the client record, which also invalidates the token.
-    throw ApiException.notImplemented("DELETE /knowledgeDrop/client/drop");
+  @Transactional
+  public MessageResponse delete(ClientRecord client, UUID clientId) {
+    if (!client.getId().equals(clientId)) {
+      throw new ApiException(HttpStatus.FORBIDDEN, "Clients can only delete themselves");
+    }
+    ClientRecord stored = clientRepository.findByIdForUpdate(clientId)
+        .orElseThrow(() -> ApiException.notFound("Client not found"));
+    if (stored.getDeletedAt() != null) {
+      throw ApiException.unauthorized("Client has been deleted");
+    }
+    Instant deletedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+    stored.setDeletedAt(deletedAt);
+    clientRepository.saveAndFlush(stored);
+    documentRepository.softDeleteByOwnerId(clientId, deletedAt);
+    return new MessageResponse("Client and owned documents deleted");
   }
 }
