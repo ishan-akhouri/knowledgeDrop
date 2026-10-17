@@ -8,6 +8,7 @@ import dev.coms4156.knowledgedrop.exception.ApiException;
 import dev.coms4156.knowledgedrop.model.ClientRecord;
 import dev.coms4156.knowledgedrop.model.DocumentRecord;
 import dev.coms4156.knowledgedrop.repository.DocumentRepository;
+import dev.coms4156.knowledgedrop.storage.FileStorage;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.MessageDigest;
@@ -32,17 +33,22 @@ public class DocumentService {
 
   private final DocumentRepository documentRepository;
   private final IngestionService ingestionService;
+  private final FileStorage fileStorage;
 
   /**
    * Creates the service. For interacting with the database and the ingestion pipeline.
    *
    * @param documentRepository repository for storing and querying document records
    * @param ingestionService service that runs the ingestion pipeline for a document
+   * @param fileStorage storage for the original uploaded files
    */
   public DocumentService(
-      DocumentRepository documentRepository, IngestionService ingestionService) {
+      DocumentRepository documentRepository,
+      IngestionService ingestionService,
+      FileStorage fileStorage) {
     this.documentRepository = documentRepository;
     this.ingestionService = ingestionService;
+    this.fileStorage = fileStorage;
   }
 
   /**
@@ -98,6 +104,12 @@ public class DocumentService {
     } catch (Exception e) {
       throw ApiException.internalServerError(
           "Failed to create document record: " + e.getMessage());
+    }
+    try (InputStream in = file.getInputStream()) {
+      fileStorage.save(client.getId(), fileName, in);
+    } catch (Exception e) {
+      throw ApiException.internalServerError(
+          "Failed to save file content: " + e.getMessage());
     }
 
     ingestionService.ingest(newDocument.getId());
