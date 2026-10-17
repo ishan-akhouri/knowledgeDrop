@@ -32,6 +32,8 @@ public class DocumentService {
    * @return the document ID and its current status
    */
   public DocumentStatusResponse create(ClientRecord client, MultipartFile file) {
+    // TODO: create: in the write transaction, lock the owner via findByIdForUpdate and reject
+    //   deleted clients before inserting documents, so uploads cannot race with client deletion.
     // TODO: create: name = file.getOriginalFilename(); strip any directory path (for example
     //   Paths.get(name).getFileName()) and return 400 if it is null or blank or longer than 255.
     // TODO: create: type = file.getContentType(); if it is missing or application/octet-stream,

@@ -22,10 +22,10 @@ public class WebConfig implements WebMvcConfigurer {
 
   @Override
   public void addInterceptors(InterceptorRegistry registry) {
-    // Every endpoint except registerClient and health requires a client token.
+    // Every endpoint except register client and health requires a client token.
     registry
         .addInterceptor(authInterceptor)
         .addPathPatterns("/knowledgeDrop/**")
-        .excludePathPatterns("/knowledgeDrop/registerClient", "/knowledgeDrop/health");
+        .excludePathPatterns("/knowledgeDrop/client/register", "/knowledgeDrop/health");
   }
 }

@@ -1,7 +1,10 @@
 package dev.coms4156.knowledgedrop.api;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -10,11 +13,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
+import dev.coms4156.knowledgedrop.model.ClientRecord;
+import dev.coms4156.knowledgedrop.repository.ClientRepository;
+import dev.coms4156.knowledgedrop.security.TokenUtils;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpHeaders;
@@ -37,6 +45,8 @@ class ApiAuthIntegrationTest {
 
   @Autowired private WebApplicationContext context;
 
+  @Autowired private ClientRepository clientRepository;
+
   private MockMvc mockMvc;
 
   @BeforeEach
@@ -50,10 +60,9 @@ class ApiAuthIntegrationTest {
 
   private MvcResult register(String name) throws Exception {
     return mockMvc
-        .perform(
-            post("/knowledgeDrop/registerClient")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"clientName\":\"" + name + "\"}"))
+        .perform(post("/knowledgeDrop/client/register").contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"" + name + "\"}"))
+        .andExpect(status().isCreated())
         .andReturn();
   }
 
@@ -66,53 +75,66 @@ class ApiAuthIntegrationTest {
     return "Bearer " + token;
   }
 
-  // ------------------------------------------------------------ registerClient
-
   @Test
-  void registerClient_returnsIdAndToken() throws Exception {
-    mockMvc
-        .perform(
-            post("/knowledgeDrop/registerClient")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"clientName\":\"" + uniqueName() + "\"}"))
+  void registerClient_returnsCredentialsAndPersistsRecord() throws Exception {
+    MvcResult result = mockMvc
+        .perform(post("/knowledgeDrop/client/register").contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\" billing-system \"}"))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.clientId").isNotEmpty())
-        .andExpect(jsonPath("$.clientToken").isNotEmpty());
+        .andExpect(jsonPath("$.clientToken").isNotEmpty())
+        .andExpect(jsonPath("$.tokenHash").doesNotExist())
+        .andReturn();
+    String body = result.getResponse().getContentAsString();
+    UUID id = UUID.fromString(JsonPath.read(body, "$.clientId"));
+    final String token = JsonPath.read(body, "$.clientToken");
+    ClientRecord stored = clientRepository.findById(id).orElseThrow();
+    assertEquals("billing-system", stored.getName());
+    assertNull(stored.getDeletedAt());
+    assertNotNull(stored.getCreatedAt());
+    assertEquals(TokenUtils.hash(token), stored.getTokenHash());
+    assertNotEquals(token, stored.getTokenHash());
   }
 
   @Test
-  void registerClient_duplicateName_returns409WithReason() throws Exception {
-    String name = uniqueName();
-    register(name);
+  void registerClient_sameNames_generateDistinctCredentials() throws Exception {
+    String first = register("billing-system").getResponse().getContentAsString();
+    String second = register("billing-system").getResponse().getContentAsString();
+    assertNotEquals((String) JsonPath.read(first, "$.clientId"),
+        (String) JsonPath.read(second, "$.clientId"));
+    assertNotEquals((String) JsonPath.read(first, "$.clientToken"),
+        (String) JsonPath.read(second, "$.clientToken"));
+  }
 
-    mockMvc
-        .perform(
-            post("/knowledgeDrop/registerClient")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"clientName\":\"" + name + "\"}"))
-        .andExpect(status().isConflict())
+  /** Verifies null, blank, and oversized system names cannot create a database record. */
+  @ParameterizedTest
+  @ValueSource(strings = {"null", "\"\"", "\"  \"", "\"\\t\"", "\"\u2003\""})
+  void registerClient_invalidName_returns400(String nameJson) throws Exception {
+    long count = clientRepository.count();
+    mockMvc.perform(post("/knowledgeDrop/client/register").contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":" + nameJson + "}"))
+        .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.reason").isNotEmpty());
+    mockMvc.perform(post("/knowledgeDrop/client/register").contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"" + "a".repeat(256) + "\"}"))
+        .andExpect(status().isBadRequest());
+    assertEquals(count, clientRepository.count());
   }
 
-  @Test
-  void registerClient_blankName_returns400() throws Exception {
-    mockMvc
-        .perform(
-            post("/knowledgeDrop/registerClient")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"clientName\":\"  \"}"))
+  @ParameterizedTest
+  @ValueSource(strings = {"", "null", "not json", "{}"})
+  void registerClient_missingOrMalformedBody_returns400(String body) throws Exception {
+    mockMvc.perform(post("/knowledgeDrop/client/register").contentType(MediaType.APPLICATION_JSON)
+            .content(body))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.reason").isNotEmpty());
   }
 
   @Test
-  void registerClient_malformedBody_returns400() throws Exception {
-    mockMvc
-        .perform(
-            post("/knowledgeDrop/registerClient")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("this is not json"))
-        .andExpect(status().isBadRequest());
+  void registerClient_maximumLengthName_succeeds() throws Exception {
+    mockMvc.perform(post("/knowledgeDrop/client/register").contentType(MediaType.APPLICATION_JSON)
+            .content("{\"name\":\"" + "a".repeat(255) + "\"}"))
+        .andExpect(status().isCreated());
   }
 
   // ------------------------------------------------------------ authentication

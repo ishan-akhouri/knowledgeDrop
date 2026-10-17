@@ -21,8 +21,11 @@ public class ClientRecord {
   @GeneratedValue(strategy = GenerationType.UUID)
   private UUID id;
 
-  @Column(nullable = false, unique = true)
+  @Column(nullable = false)
   private String name;
+
+  @Column(name = "deleted_at")
+  private Instant deletedAt;
 
   @Column(name = "token_hash", nullable = false, unique = true)
   private String tokenHash;
@@ -36,7 +39,7 @@ public class ClientRecord {
   /**
    * Creates a client record.
    *
-   * @param name unique client name
+   * @param name name of the client system
    * @param tokenHash SHA-256 hex digest of the client token
    */
   public ClientRecord(String name, String tokenHash) {
@@ -51,6 +54,14 @@ public class ClientRecord {
 
   public String getName() {
     return name;
+  }
+
+  public Instant getDeletedAt() {
+    return deletedAt;
+  }
+
+  public void setDeletedAt(Instant deletedAt) {
+    this.deletedAt = deletedAt;
   }
 
   public String getTokenHash() {

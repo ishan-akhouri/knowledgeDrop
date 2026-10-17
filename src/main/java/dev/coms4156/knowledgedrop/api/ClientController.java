@@ -11,16 +11,16 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Client registration endpoints. */
+/** Client registration and deletion endpoints. */
 @RestController
-@RequestMapping("/knowledgeDrop")
+@RequestMapping("/knowledgeDrop/client")
 public class ClientController {
 
   private final ClientService clientService;
@@ -35,18 +35,18 @@ public class ClientController {
   }
 
   /** Registers a client and returns its ID and token (no token required). Built. */
-  @PostMapping("/registerClient")
+  @PostMapping("/register")
   public ResponseEntity<RegisterClientResponse> registerClient(
       @Valid @RequestBody RegisterClientRequest request) {
-    RegisterClientResponse body = clientService.register(request.clientName());
+    RegisterClientResponse body = clientService.register(request.name());
     return ResponseEntity.status(HttpStatus.CREATED).body(body);
   }
 
-  /** Deletes the calling client and all of its data. TODO(clientDrop). */
-  @DeleteMapping("/clientDrop")
-  public MessageResponse clientDrop(
+  /** Soft-deletes the calling client and all owned documents. */
+  @DeleteMapping("/{clientId}")
+  public MessageResponse deleteClient(
       @RequestAttribute(AuthInterceptor.CLIENT_ATTRIBUTE) ClientRecord client,
-      @RequestParam("clientId") UUID clientId) {
-    return clientService.drop(client, clientId);
+      @PathVariable("clientId") UUID clientId) {
+    return clientService.delete(client, clientId);
   }
 }
