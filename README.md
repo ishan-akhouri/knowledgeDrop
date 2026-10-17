@@ -55,7 +55,7 @@ flowchart TB
 - **LLM:** generates answers from retrieved context and produces summaries.
 - **Scoping:** every query is filtered by client, so one client never sees another client's data.
 
-All API traffic uses REST with JSON request and response bodies.
+The API uses REST and JSON responses. Registration takes names in a JSON request body.
 
 ## Database Schema
 
@@ -67,7 +67,9 @@ erDiagram
 
     clients {
         uuid id PK "Generated UUID"
-        varchar name UK "Required; unique client name"
+        varchar first_name "Required; client first name"
+        varchar last_name "Required; client last name"
+        boolean is_active "Required; true on registration"
         varchar token_hash UK "Required; unique SHA-256 token hash"
         timestamptz created_at "Required; registration time"
     }
@@ -94,7 +96,7 @@ erDiagram
 
 ## Conventions
 
-- **Authentication:** the client token returned by `registerClient` is sent as `Authorization: Bearer <token>` on every endpoint except `registerClient` and `health`. Invalid or missing tokens return HTTP 401. Only a SHA-256 hash of the token is stored.
+- **Authentication:** the client token returned by `client/register` is sent as `Authorization: Bearer <token>` on every endpoint except `client/register` and `health`. Invalid or missing tokens return HTTP 401. Only a SHA-256 hash of the token is stored.
 - **Document status:** each document is `processing` (being ingested), `ready` (searchable), or `failed`. Search, `ask`, `similarity`, and `summarize` only use `ready` documents.
 - **Document names:** a document's name is the original filename of the uploaded file. `read` and `delete` identify a document by its name (the `documentName` query parameter), so names are unique per client among non-deleted documents. Soft-deleted documents are ignored by name lookups, so a deleted name can be reused by a later `create`. Uploading a file whose name matches one of the client's existing documents replaces that document's content (keeping its document ID) and re-ingests it. `create` returns HTTP 400 if the upload has no filename.
 - **Ingestion pipeline:** `create` extracts text (direct read for text files, text extraction for PDFs, OCR for images, keeping page numbers), splits it into chunks, embeds each chunk into the Elasticsearch vector store, and indexes each chunk's text in Elasticsearch for keyword search. Ingestion runs in the background, so `create` returns `202 Accepted` with status `processing`.
@@ -108,8 +110,18 @@ All paths are under `/knowledgeDrop`. Document management endpoints are grouped 
 
 | Method | Endpoint | Inputs | Behavior |
 |---|---|---|---|
-| POST | `/knowledgeDrop/registerClient` | Client object (client name) | Creates a client with a new client ID and token. Returns both, or HTTP 409 if the name is already registered. |
-| DELETE | `/knowledgeDrop/clientDrop` | Token, client ID | Verifies the token matches the client ID, then deletes all of the client's documents (files, Elasticsearch chunk entries and embeddings), the client record, and the token. |
+| POST | `/knowledgeDrop/client/register` | JSON body with required `firstName` and `lastName` fields | Returns HTTP 201 with `clientId` (UUID) and `clientToken`. Stores only the SHA-256 token hash. Names may repeat; invalid or missing fields return HTTP 400. |
+| DELETE | `/knowledgeDrop/client/drop` | Token, client ID | Verifies the token matches the client ID, then deletes all of the client's documents (files, Elasticsearch chunk entries and embeddings), the client record, and the token. |
+
+Registration replaces the former `/knowledgeDrop/registerClient` JSON-body endpoint.
+Both name fields must be nonblank and at most 255 characters; surrounding whitespace is removed.
+The returned token contains 256 random bits and is shown only in the registration response.
+New clients have `is_active = true`; inactive clients cannot authenticate.
+
+Local development data is disposable. If your database still uses the old `clients.name`
+schema, stop the application, run `docker compose down -v` to wipe the PostgreSQL and
+Elasticsearch data volumes, then run `docker compose up -d` and restart the application.
+Hibernate creates the current schema in the fresh database; no migration is needed.
 
 ### Document Management
 
@@ -190,8 +202,9 @@ Never commit `.env`. Add new variables to `.env.example` with a safe placeholder
 ### Try it
 
 ```bash
-curl -s -X POST localhost:8080/knowledgeDrop/registerClient \
-  -H 'Content-Type: application/json' -d '{"clientName":"demo"}'
+curl -s -X POST localhost:8080/knowledgeDrop/client/register \
+  -H 'Content-Type: application/json' \
+  -d '{"firstName":"Ada","lastName":"Lovelace"}'
 # => {"clientId":"...","clientToken":"..."}   (token is shown once)
 
 TOKEN=<clientToken>
@@ -210,7 +223,7 @@ Endpoint logic that is not built yet is marked with a `TODO:` comment that names
 
 | Endpoint | Status | Implement in |
 |---|---|---|
-| `POST registerClient` | **Built** (reference implementation) | `ClientService.register` |
+| `POST client/register` | **Built** (reference implementation) | `ClientService.register` |
 | `POST document/create` (also replaces a same-name document) | To do | `DocumentService.create` |
 | `GET document/read` | To do | `DocumentService.read` |
 | `DELETE document/delete` | To do | `DocumentService.delete` |

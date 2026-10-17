@@ -21,8 +21,14 @@ public class ClientRecord {
   @GeneratedValue(strategy = GenerationType.UUID)
   private UUID id;
 
-  @Column(nullable = false, unique = true)
-  private String name;
+  @Column(name = "first_name", nullable = false)
+  private String firstName;
+
+  @Column(name = "last_name", nullable = false)
+  private String lastName;
+
+  @Column(name = "is_active", nullable = false)
+  private boolean active;
 
   @Column(name = "token_hash", nullable = false, unique = true)
   private String tokenHash;
@@ -36,11 +42,14 @@ public class ClientRecord {
   /**
    * Creates a client record.
    *
-   * @param name unique client name
+   * @param firstName client first name
+   * @param lastName client last name
    * @param tokenHash SHA-256 hex digest of the client token
    */
-  public ClientRecord(String name, String tokenHash) {
-    this.name = name;
+  public ClientRecord(String firstName, String lastName, String tokenHash) {
+    this.firstName = firstName;
+    this.lastName = lastName;
+    this.active = true;
     this.tokenHash = tokenHash;
     this.createdAt = Instant.now();
   }
@@ -49,8 +58,16 @@ public class ClientRecord {
     return id;
   }
 
-  public String getName() {
-    return name;
+  public String getFirstName() {
+    return firstName;
+  }
+
+  public String getLastName() {
+    return lastName;
+  }
+
+  public boolean isActive() {
+    return active;
   }
 
   public String getTokenHash() {

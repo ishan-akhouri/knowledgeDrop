@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /** Client registration endpoints. */
 @RestController
-@RequestMapping("/knowledgeDrop")
+@RequestMapping("/knowledgeDrop/client")
 public class ClientController {
 
   private final ClientService clientService;
@@ -35,15 +35,15 @@ public class ClientController {
   }
 
   /** Registers a client and returns its ID and token (no token required). Built. */
-  @PostMapping("/registerClient")
+  @PostMapping("/register")
   public ResponseEntity<RegisterClientResponse> registerClient(
       @Valid @RequestBody RegisterClientRequest request) {
-    RegisterClientResponse body = clientService.register(request.clientName());
+    RegisterClientResponse body = clientService.register(request.firstName(), request.lastName());
     return ResponseEntity.status(HttpStatus.CREATED).body(body);
   }
 
   /** Deletes the calling client and all of its data. TODO(clientDrop). */
-  @DeleteMapping("/clientDrop")
+  @DeleteMapping("/drop")
   public MessageResponse clientDrop(
       @RequestAttribute(AuthInterceptor.CLIENT_ATTRIBUTE) ClientRecord client,
       @RequestParam("clientId") UUID clientId) {

@@ -2,11 +2,11 @@ package dev.coms4156.knowledgedrop.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -20,11 +20,13 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -36,10 +38,10 @@ class ClientServiceTest {
 
   @InjectMocks private ClientService clientService;
 
+  /** Verifies registration trims names, creates an active client, and stores only the token hash. */
   @Test
   void register_newName_returnsTokenAndStoresOnlyItsHash() {
     UUID id = UUID.randomUUID();
-    when(clientRepository.existsByName("acme")).thenReturn(false);
     when(clientRepository.saveAndFlush(any(ClientRecord.class)))
         .thenAnswer(
             invocation -> {
@@ -48,41 +50,56 @@ class ClientServiceTest {
               return entity;
             });
 
-    RegisterClientResponse response = clientService.register("  acme ");
+    final RegisterClientResponse response = clientService.register("  Ada ", " Lovelace  ");
 
     ArgumentCaptor<ClientRecord> captor = ArgumentCaptor.forClass(ClientRecord.class);
     verify(clientRepository).saveAndFlush(captor.capture());
     ClientRecord stored = captor.getValue();
-    assertEquals("acme", stored.getName());
+    assertEquals("Ada", stored.getFirstName());
+    assertEquals("Lovelace", stored.getLastName());
+    assertTrue(stored.isActive());
+    assertNotNull(stored.getCreatedAt());
     assertEquals(id, response.clientId());
     assertNotEquals(response.clientToken(), stored.getTokenHash());
     assertEquals(TokenUtils.hash(response.clientToken()), stored.getTokenHash());
   }
 
-  @Test
-  void register_duplicateName_throwsConflict() {
-    when(clientRepository.existsByName("acme")).thenReturn(true);
-
-    ApiException ex = assertThrows(ApiException.class, () -> clientService.register("acme"));
-
-    assertEquals(HttpStatus.CONFLICT, ex.getStatus());
-    verify(clientRepository, never()).saveAndFlush(any());
+  /** Verifies null, empty, or whitespace-only names return HTTP 400 without accessing storage. */
+  @ParameterizedTest
+  @NullAndEmptySource
+  @ValueSource(strings = {"  ", "\t", "\u2003"})
+  void register_invalidName_rejectsBeforeSaving(String name) {
+    ApiException first = assertThrows(ApiException.class,
+        () -> clientService.register(name, "Lovelace"));
+    ApiException last = assertThrows(ApiException.class,
+        () -> clientService.register("Ada", name));
+    assertEquals(HttpStatus.BAD_REQUEST, first.getStatus());
+    assertEquals(HttpStatus.BAD_REQUEST, last.getStatus());
+    verifyNoInteractions(clientRepository);
   }
 
+  /** Verifies either name exceeding 255 characters is rejected before accessing storage. */
   @Test
-  void register_lostRaceOnUniqueConstraint_throwsConflict() {
-    when(clientRepository.existsByName("acme")).thenReturn(false);
-    when(clientRepository.saveAndFlush(any(ClientRecord.class)))
-        .thenThrow(new DataIntegrityViolationException("duplicate"));
-
-    ApiException ex = assertThrows(ApiException.class, () -> clientService.register("acme"));
-
-    assertEquals(HttpStatus.CONFLICT, ex.getStatus());
+  void register_oversizedName_rejectsBeforeSaving() {
+    assertThrows(ApiException.class, () -> clientService.register("a".repeat(256), "Last"));
+    assertThrows(ApiException.class, () -> clientService.register("First", "b".repeat(256)));
+    verifyNoInteractions(clientRepository);
   }
 
+  /** Verifies a valid token cannot authenticate an inactive client. */
+  @Test
+  void authenticate_inactiveClient_returnsEmpty() {
+    ClientRecord client = new ClientRecord("Ada", "Lovelace", TokenUtils.hash("secret"));
+    ReflectionTestUtils.setField(client, "active", false);
+    when(clientRepository.findByTokenHash(TokenUtils.hash("secret")))
+        .thenReturn(Optional.of(client));
+    assertTrue(clientService.authenticate("secret").isEmpty());
+  }
+
+  /** Verifies authentication hashes the supplied token and returns its active client. */
   @Test
   void authenticate_knownToken_returnsClient() {
-    ClientRecord client = new ClientRecord("acme", TokenUtils.hash("secret"));
+    ClientRecord client = new ClientRecord("Ada", "Lovelace", TokenUtils.hash("secret"));
     when(clientRepository.findByTokenHash(TokenUtils.hash("secret")))
         .thenReturn(Optional.of(client));
 
@@ -92,6 +109,7 @@ class ClientServiceTest {
     assertSame(client, result.get());
   }
 
+  /** Verifies null or whitespace-only tokens return no client without a database lookup. */
   @Test
   void authenticate_blankToken_returnsEmptyWithoutLookup() {
     assertTrue(clientService.authenticate("  ").isEmpty());
