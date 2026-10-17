@@ -71,15 +71,27 @@ public class DocumentRecord {
   /**
    * Creates a record in the {@code processing} state.
    *
+   * <p>The content size and SHA-1 hash are computed by the caller (the service layer, which has
+   * access to the uploaded file) and validated here, so a record never exists without them.
+   *
    * @param ownerId ID of the owning client
    * @param name document name, unique per client
    * @param type document MIME type
+   * @param fileBytes size of the content in bytes; must not be negative
+   * @param contentHash SHA-1 of the content as 40 lowercase hex characters
+   * @throws NullPointerException if {@code contentHash} is null
+   * @throws IllegalArgumentException if {@code fileBytes} is negative or {@code contentHash} is
+   *     not 40 lowercase hex characters
    */
-  public DocumentRecord(UUID ownerId, String name, String type) {
+  public DocumentRecord(
+      UUID ownerId, String name, String type, long fileBytes, String contentHash) {
+    validateContent(fileBytes, contentHash);
     this.ownerId = ownerId;
     this.name = name;
     this.type = type;
     this.status = DocumentStatus.PROCESSING;
+    this.fileBytes = fileBytes;
+    this.contentHash = contentHash;
     this.uploadedAt = Instant.now();
   }
 
@@ -141,7 +153,8 @@ public class DocumentRecord {
   }
 
   /**
-   * Records the size and SHA-1 hash of the document content.
+   * Replaces the size and SHA-1 hash of the document content, for when an existing record's
+   * content is replaced (a new record gets them through the constructor).
    *
    * <p>SHA-1 produces a 160-bit (20-byte) digest, stored as 40 lowercase hex characters.
    *
@@ -156,6 +169,12 @@ public class DocumentRecord {
    *     not 40 lowercase hex characters
    */
   public void recordContent(long fileBytes, String contentHash) {
+    validateContent(fileBytes, contentHash);
+    this.fileBytes = fileBytes;
+    this.contentHash = contentHash;
+  }
+
+  private static void validateContent(long fileBytes, String contentHash) {
     Objects.requireNonNull(contentHash, "contentHash must not be null");
     if (fileBytes < 0) {
       throw new IllegalArgumentException("fileBytes must not be negative");
@@ -164,9 +183,6 @@ public class DocumentRecord {
       throw new IllegalArgumentException(
           "contentHash must be 40 lowercase hexadecimal characters (SHA-1)");
     }
-
-    this.fileBytes = fileBytes;
-    this.contentHash = contentHash;
   }
 
   public Instant getUploadedAt() {

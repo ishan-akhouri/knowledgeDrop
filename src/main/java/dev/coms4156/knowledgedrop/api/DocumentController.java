@@ -28,8 +28,9 @@ import org.springframework.web.multipart.MultipartFile;
  *
  * <p>Create takes {@code multipart/form-data} with a single binary {@code file} part; the document
  * name is the file's original filename and its type is the file's content type. If the client
- * already has a non-deleted document with that name, create replaces its content and re-ingests
- * it. Read and delete identify the document by the {@code documentName} query parameter.
+ * already has a non-deleted document with that name, create soft-deletes it and stores the
+ * upload as a new document with a new ID. Read and delete identify the document by the
+ * {@code documentName} query parameter.
  *
  * <p>All paths are served under the {@code /knowledgeDrop/document} prefix, for example
  * {@code POST /knowledgeDrop/document/create}.
@@ -50,8 +51,8 @@ public class DocumentController {
   }
 
   /**
-   * Uploads a document (a single binary file part) and starts ingestion, replacing the content of
-   * an existing document with the same name. TODO(create).
+   * Uploads a document (a single binary file part) and starts ingestion. If a document with that
+   * name already exists, it is soft-deleted and the upload gets a new ID. TODO(create).
    */
   @PostMapping(path = "/create", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   public ResponseEntity<DocumentStatusResponse> create(
@@ -61,7 +62,7 @@ public class DocumentController {
     return ResponseEntity.status(HttpStatus.ACCEPTED).body(body);
   }
 
-  /** Returns the content and metadata of the client's non-deleted document. TODO(read). */
+  /** Returns the content and metadata of the client's non-deleted document. */
   @GetMapping("/read")
   public DocumentReadResponse read(
       @RequestAttribute(AuthInterceptor.CLIENT_ATTRIBUTE) ClientRecord client,
