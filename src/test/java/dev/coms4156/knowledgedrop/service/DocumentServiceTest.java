@@ -1,12 +1,17 @@
 package dev.coms4156.knowledgedrop.service;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -14,23 +19,30 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import dev.coms4156.knowledgedrop.api.dto.DocumentStatusResponse;
+import dev.coms4156.knowledgedrop.config.KnowledgeDropProperties;
 import dev.coms4156.knowledgedrop.exception.ApiException;
 import dev.coms4156.knowledgedrop.model.ClientRecord;
 import dev.coms4156.knowledgedrop.model.DocumentRecord;
 import dev.coms4156.knowledgedrop.model.DocumentStatus;
 import dev.coms4156.knowledgedrop.repository.DocumentRepository;
+import dev.coms4156.knowledgedrop.storage.FileStorage;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -39,7 +51,11 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.multipart.MultipartFile;
 
-/** Unit tests for {@link DocumentService} with a mocked repository and ingestion service. */
+/**
+ * Unit tests for {@link DocumentService} with a mocked repository, ingestion service and file
+ * storage. A few tests use a real {@link FileStorage} rooted in a temporary directory to check
+ * that uploaded files really land in the data path.
+ */
 @ExtendWith(MockitoExtension.class)
 class DocumentServiceTest {
 
@@ -49,6 +65,8 @@ class DocumentServiceTest {
   @Mock private DocumentRepository documentRepository;
 
   @Mock private IngestionService ingestionService;
+
+  @Mock private FileStorage fileStorage;
 
   @InjectMocks private DocumentService documentService;
 
@@ -78,6 +96,18 @@ class DocumentServiceTest {
   private static MockMultipartFile textFile(String name, String content) {
     return new MockMultipartFile(
         "file", name, "text/plain", content.getBytes(StandardCharsets.UTF_8));
+  }
+
+  /** Builds a service that writes through a real {@link FileStorage} rooted at {@code dataDir}. */
+  private DocumentService serviceWithRealStorage(Path dataDir) {
+    KnowledgeDropProperties properties =
+        new KnowledgeDropProperties(
+            dataDir.toString(),
+            new KnowledgeDropProperties.Ingestion(800, 100),
+            new KnowledgeDropProperties.Retrieval(5, 60, 50),
+            new KnowledgeDropProperties.Embedding("http://localhost:5000", "model", 384),
+            new KnowledgeDropProperties.Llm("", "", ""));
+    return new DocumentService(documentRepository, ingestionService, new FileStorage(properties));
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -151,6 +181,176 @@ class DocumentServiceTest {
   }
 
   // ---------------------------------------------------------------------------------------------
+  // create: saving the original file in the data path
+  // ---------------------------------------------------------------------------------------------
+
+  @Test
+  void create_newDocument_savesOriginalFileForClientUnderItsName() throws Exception {
+    saveAssignsIds();
+    AtomicReference<byte[]> savedBytes = new AtomicReference<>();
+    when(fileStorage.save(eq(clientId), eq("notes.txt"), any(InputStream.class)))
+        .thenAnswer(
+            invocation -> {
+              InputStream in = invocation.getArgument(2);
+              savedBytes.set(in.readAllBytes());
+              return Path.of("unused");
+            });
+
+    documentService.create(client, textFile("notes.txt", "hello"));
+
+    verify(fileStorage).save(eq(clientId), eq("notes.txt"), any(InputStream.class));
+    assertArrayEquals("hello".getBytes(StandardCharsets.UTF_8), savedBytes.get());
+  }
+
+  @Test
+  void create_savesFileAfterRecordAndBeforeIngestion() throws Exception {
+    saveAssignsIds();
+
+    DocumentStatusResponse response = documentService.create(client, textFile("notes.txt", "hi"));
+
+    InOrder order = inOrder(documentRepository, fileStorage, ingestionService);
+    order.verify(documentRepository).save(any(DocumentRecord.class));
+    order.verify(fileStorage).save(eq(clientId), eq("notes.txt"), any(InputStream.class));
+    order.verify(ingestionService).ingest(response.documentId());
+  }
+
+  @Test
+  void create_emptyFile_stillSavesFile() throws Exception {
+    saveAssignsIds();
+    AtomicReference<byte[]> savedBytes = new AtomicReference<>();
+    when(fileStorage.save(eq(clientId), eq("empty.txt"), any(InputStream.class)))
+        .thenAnswer(
+            invocation -> {
+              InputStream in = invocation.getArgument(2);
+              savedBytes.set(in.readAllBytes());
+              return Path.of("unused");
+            });
+
+    documentService.create(client, textFile("empty.txt", ""));
+
+    verify(fileStorage).save(eq(clientId), eq("empty.txt"), any(InputStream.class));
+    assertEquals(0, savedBytes.get().length);
+  }
+
+  @Test
+  void create_existingDocumentWithSameName_savesNewFileOnce() throws Exception {
+    saveAssignsIds();
+    DocumentRecord existing =
+        new DocumentRecord(clientId, "notes.txt", "text/plain", 3L, EMPTY_SHA1);
+    ReflectionTestUtils.setField(existing, "id", UUID.randomUUID());
+    when(documentRepository.findByOwnerIdAndNameAndDeletedAtIsNull(clientId, "notes.txt"))
+        .thenReturn(Optional.of(existing));
+
+    documentService.create(client, textFile("notes.txt", "hello"));
+
+    verify(fileStorage, times(1)).save(eq(clientId), eq("notes.txt"), any(InputStream.class));
+  }
+
+  @Test
+  void create_fileStorageFails_throwsInternalServerErrorAndSkipsIngestion() throws Exception {
+    saveAssignsIds();
+    when(fileStorage.save(any(UUID.class), any(String.class), any(InputStream.class)))
+        .thenThrow(new IOException("disk full"));
+    MockMultipartFile file = textFile("notes.txt", "hello");
+
+    ApiException ex = assertThrows(ApiException.class, () -> documentService.create(client, file));
+
+    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatus());
+    verifyNoInteractions(ingestionService);
+  }
+
+  @Test
+  void create_fileStorageRejectsFileName_throwsInternalServerErrorAndSkipsIngestion()
+      throws Exception {
+    saveAssignsIds();
+    when(fileStorage.save(any(UUID.class), any(String.class), any(InputStream.class)))
+        .thenThrow(new IllegalArgumentException("Invalid file name"));
+    MockMultipartFile file = textFile("../evil.txt", "hello");
+
+    ApiException ex = assertThrows(ApiException.class, () -> documentService.create(client, file));
+
+    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatus());
+    verifyNoInteractions(ingestionService);
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // create: saving the original file in the data path, with real file storage
+  // ---------------------------------------------------------------------------------------------
+
+  @Test
+  void create_realStorage_writesFileToClientDirectoryInDataPath(@TempDir Path dataDir)
+      throws Exception {
+    saveAssignsIds();
+    DocumentService service = serviceWithRealStorage(dataDir);
+
+    service.create(client, textFile("notes.txt", "hello"));
+
+    Path expected = dataDir.resolve(clientId.toString()).resolve("notes.txt");
+    assertTrue(Files.exists(expected));
+    assertEquals("hello", Files.readString(expected));
+  }
+
+  @Test
+  void create_realStorage_writesBinaryContentUnchanged(@TempDir Path dataDir) throws Exception {
+    saveAssignsIds();
+    DocumentService service = serviceWithRealStorage(dataDir);
+    byte[] content = new byte[20_000];
+    for (int i = 0; i < content.length; i++) {
+      content[i] = (byte) (i % 251);
+    }
+
+    service.create(client, new MockMultipartFile("file", "big.bin", "application/pdf", content));
+
+    Path expected = dataDir.resolve(clientId.toString()).resolve("big.bin");
+    assertArrayEquals(content, Files.readAllBytes(expected));
+  }
+
+  @Test
+  void create_realStorage_sameNameUploadReplacesStoredFile(@TempDir Path dataDir)
+      throws Exception {
+    saveAssignsIds();
+    DocumentService service = serviceWithRealStorage(dataDir);
+
+    service.create(client, textFile("notes.txt", "first version"));
+    service.create(client, textFile("notes.txt", "second"));
+
+    Path expected = dataDir.resolve(clientId.toString()).resolve("notes.txt");
+    assertEquals("second", Files.readString(expected));
+  }
+
+  @Test
+  void create_realStorage_keepsEachClientsFilesSeparate(@TempDir Path dataDir) throws Exception {
+    saveAssignsIds();
+    DocumentService service = serviceWithRealStorage(dataDir);
+    UUID otherClientId = UUID.randomUUID();
+    ClientRecord otherClient = new ClientRecord("other", "other-token-hash");
+    ReflectionTestUtils.setField(otherClient, "id", otherClientId);
+
+    service.create(client, textFile("notes.txt", "mine"));
+    service.create(otherClient, textFile("notes.txt", "theirs"));
+
+    assertEquals(
+        "mine", Files.readString(dataDir.resolve(clientId.toString()).resolve("notes.txt")));
+    assertEquals(
+        "theirs", Files.readString(dataDir.resolve(otherClientId.toString()).resolve("notes.txt")));
+  }
+
+  @Test
+  void create_realStorage_fileNameEscapingClientDirectory_isRejectedAndNothingWritten(
+      @TempDir Path dataDir) throws Exception {
+    saveAssignsIds();
+    DocumentService service = serviceWithRealStorage(dataDir);
+    MockMultipartFile file = textFile("../../escaped.txt", "evil");
+
+    ApiException ex = assertThrows(ApiException.class, () -> service.create(client, file));
+
+    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatus());
+    assertFalse(Files.exists(dataDir.resolve("escaped.txt")));
+    assertFalse(Files.exists(dataDir.getParent().resolve("escaped.txt")));
+    verifyNoInteractions(ingestionService);
+  }
+
+  // ---------------------------------------------------------------------------------------------
   // create: replacing an existing document
   // ---------------------------------------------------------------------------------------------
 
@@ -194,7 +394,7 @@ class DocumentServiceTest {
     ApiException ex = assertThrows(ApiException.class, () -> documentService.create(null, file));
 
     assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
-    verifyNoInteractions(documentRepository, ingestionService);
+    verifyNoInteractions(documentRepository, ingestionService, fileStorage);
   }
 
   @Test
@@ -208,7 +408,7 @@ class DocumentServiceTest {
     ApiException ex = assertThrows(ApiException.class, () -> documentService.create(client, file));
 
     assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
-    verifyNoInteractions(documentRepository, ingestionService);
+    verifyNoInteractions(documentRepository, ingestionService, fileStorage);
   }
 
   @Test
@@ -221,7 +421,7 @@ class DocumentServiceTest {
 
     assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatus());
     verify(documentRepository, never()).save(any());
-    verifyNoInteractions(ingestionService);
+    verifyNoInteractions(ingestionService, fileStorage);
   }
 
   @Test
@@ -243,7 +443,7 @@ class DocumentServiceTest {
 
     assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatus());
     verify(documentRepository, never()).save(any());
-    verifyNoInteractions(ingestionService);
+    verifyNoInteractions(ingestionService, fileStorage);
   }
 
   @Test
@@ -255,7 +455,7 @@ class DocumentServiceTest {
     ApiException ex = assertThrows(ApiException.class, () -> documentService.create(client, file));
 
     assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatus());
-    verifyNoInteractions(ingestionService);
+    verifyNoInteractions(ingestionService, fileStorage);
   }
 
   // ---------------------------------------------------------------------------------------------
