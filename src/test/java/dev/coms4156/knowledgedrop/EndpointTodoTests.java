@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
  */
 class EndpointTodoTests {
 
-  // ---- POST /knowledgeDrop/create
+  // ---- POST /knowledgeDrop/document/create
   @Test
   @Disabled("TODO(create)")
   void create_validRequest_returnsDocumentIdAndProcessingStatus() {}
@@ -25,7 +25,23 @@ class EndpointTodoTests {
 
   @Test
   @Disabled("TODO(create)")
-  void create_duplicateNameForSameClient_returns409() {}
+  void create_missingOrBlankFilename_returns400() {}
+
+  @Test
+  @Disabled("TODO(create)")
+  void create_usesOriginalFilenameAsDocumentName() {}
+
+  @Test
+  @Disabled("TODO(create)")
+  void create_sameNameAsExistingDocument_replacesChunksAndKeepsDocumentId() {}
+
+  @Test
+  @Disabled("TODO(create)")
+  void create_sameNameAsSoftDeletedDocument_createsNewDocument() {}
+
+  @Test
+  @Disabled("TODO(create)")
+  void create_sameNameForDifferentClient_createsSeparateDocument() {}
 
   @Test
   @Disabled("TODO(ingestion)")
@@ -35,16 +51,7 @@ class EndpointTodoTests {
   @Disabled("TODO(ingestion)")
   void ingestion_success_setsStatusReadyAndIndexesChunks() {}
 
-  // ---- PUT /knowledgeDrop/update
-  @Test
-  @Disabled("TODO(update)")
-  void update_replacesChunksAndKeepsDocumentId() {}
-
-  @Test
-  @Disabled("TODO(update)")
-  void update_documentNotOwnedByClient_returnsError() {}
-
-  // ---- GET /knowledgeDrop/read
+  // ---- GET /knowledgeDrop/document/read
   @Test
   @Disabled("TODO(read)")
   void read_existingDocument_returnsContentAndMetadata() {}
@@ -53,7 +60,7 @@ class EndpointTodoTests {
   @Disabled("TODO(read)")
   void read_unknownDocument_returns404() {}
 
-  // ---- DELETE /knowledgeDrop/delete
+  // ---- DELETE /knowledgeDrop/document/delete
   @Test
   @Disabled("TODO(delete)")
   void delete_removesFileChunksAndRecord() {}
@@ -62,7 +69,7 @@ class EndpointTodoTests {
   @Disabled("TODO(delete)")
   void delete_documentNotOwnedByClient_returnsError() {}
 
-  // ---- GET /knowledgeDrop/list
+  // ---- GET /knowledgeDrop/document/list
   @Test
   @Disabled("TODO(list)")
   void list_appliesStatusFilterAndPagination() {}

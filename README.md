@@ -12,7 +12,7 @@ Vector search is strong at meaning (for example, "How do I cancel?" matching a t
 flowchart TB
     C[Client program] -->|REST + JSON<br/>Bearer token| API[Spring Boot API]
 
-    API -->|create / update| Ingest
+    API -->|create| Ingest
     API -->|registerClient / read / list| REC
     API -->|delete / clientDrop| Stores
     API -.->|health<br/>pings Elasticsearch| Stores
@@ -57,17 +57,52 @@ flowchart TB
 
 All API traffic uses REST with JSON request and response bodies.
 
+## Database Schema
+
+PostgreSQL stores two tables: `clients` for registered API clients and `documents` for uploaded document metadata. One client can own zero or many documents; each document records one owner's ID.
+
+```mermaid
+erDiagram
+    clients ||..o{ documents : "owns (logical relationship)"
+
+    clients {
+        uuid id PK "Generated UUID"
+        varchar name UK "Required; unique client name"
+        varchar token_hash UK "Required; unique SHA-256 token hash"
+        timestamptz created_at "Required; registration time"
+    }
+
+    documents {
+        uuid id PK "Generated UUID"
+        uuid owner_id "Required; refers to clients.id logically"
+        varchar name "Required; original filename"
+        varchar doc_type "Required; MIME type, up to 127 characters"
+        varchar status "Required; PROCESSING, READY, or FAILED"
+        varchar failure_reason "Optional; up to 1000 characters"
+        bigint file_bytes "Content size in bytes"
+        varchar content_hash "Optional; 40-character SHA-1 hex digest"
+        timestamptz uploaded_at "Required; upload time"
+        timestamptz deleted_at "Optional; null means not deleted"
+    }
+```
+
+- **Keys and ownership:** `PK` = primary key; `UK` = unique column. The ownership relationship is logical: `owner_id` has no declared foreign key or cascading deletion.
+- **Document names:** uniqueness per owner among non-deleted documents must be enforced by the application; there is no database unique constraint on `(owner_id, name)`.
+- **Soft deletion:** `deleted_at IS NULL` identifies non-deleted records. Queries must apply this filter explicitly; ingestion `status` is independent.
+- **Storage:** PostgreSQL holds metadata, not file contents. Chunk text and embeddings live in Elasticsearch, keyed by document ID.
+- **Schema source:** [ClientRecord](src/main/java/dev/coms4156/knowledgedrop/model/ClientRecord.java) and [DocumentRecord](src/main/java/dev/coms4156/knowledgedrop/model/DocumentRecord.java) define the mappings. [application.yml](src/main/resources/application.yml) enables `ddl-auto: update` at startup; obsolete columns or constraints may remain in existing databases.
+
 ## Conventions
 
 - **Authentication:** the client token returned by `registerClient` is sent as `Authorization: Bearer <token>` on every endpoint except `registerClient` and `health`. Invalid or missing tokens return HTTP 401. Only a SHA-256 hash of the token is stored.
 - **Document status:** each document is `processing` (being ingested), `ready` (searchable), or `failed`. Search, `ask`, `similarity`, and `summarize` only use `ready` documents.
-- **Document names:** a document can be referenced by ID or by name, so names are unique per client. `create` returns HTTP 409 if the client already has a document with that name.
-- **Ingestion pipeline:** `create` and `update` extract text (direct read for text files, text extraction for PDFs, OCR for images, keeping page numbers), split it into chunks, embed each chunk into the Elasticsearch vector store, and index each chunk's text in Elasticsearch for keyword search. Ingestion runs in the background, so `create` and `update` return `202 Accepted` with status `processing`.
+- **Document names:** a document's name is the original filename of the uploaded file. `read` and `delete` identify a document by its name (the `documentName` query parameter), so names are unique per client among non-deleted documents. Soft-deleted documents are ignored by name lookups, so a deleted name can be reused by a later `create`. Uploading a file whose name matches one of the client's existing documents replaces that document's content (keeping its document ID) and re-ingests it. `create` returns HTTP 400 if the upload has no filename.
+- **Ingestion pipeline:** `create` extracts text (direct read for text files, text extraction for PDFs, OCR for images, keeping page numbers), splits it into chunks, embeds each chunk into the Elasticsearch vector store, and indexes each chunk's text in Elasticsearch for keyword search. Ingestion runs in the background, so `create` returns `202 Accepted` with status `processing`.
 - **Errors:** always `{"error": "Not Found", "reason": "..."}`.
 
 ## API Reference
 
-All paths are under `/knowledgeDrop`.
+All paths are under `/knowledgeDrop`. Document management endpoints are grouped under the `/knowledgeDrop/document` prefix (for example `POST /knowledgeDrop/document/create`).
 
 ### Client Registration
 
@@ -80,11 +115,10 @@ All paths are under `/knowledgeDrop`.
 
 | Method | Endpoint | Inputs | Behavior |
 |---|---|---|---|
-| POST | `/knowledgeDrop/create` | Token, document name, type (`pdf`, `text`, `image`), content | Stores the file, runs the ingestion pipeline, and returns the document ID and status. Errors on an unsupported type, empty content, or a name the client already uses (409). |
-| PUT | `/knowledgeDrop/update` | Token, document ID or name, new content | Deletes the document's existing chunks and embeddings from Elasticsearch and re-ingests the new content. Keeps the same document ID and sets status to `processing`. |
-| GET | `/knowledgeDrop/read` | Token, document ID or name | Returns the content, ID, filename, type, upload time, and status, or HTTP 404. |
-| DELETE | `/knowledgeDrop/delete` | Token, document ID or name | Deletes the stored file, its Elasticsearch chunk entries and embeddings, and the document record. |
-| GET | `/knowledgeDrop/list` | Token, optional `status`, `limit`, `offset` | Returns the client's documents with ID, filename, type, upload time, and status. Returns an empty list if there are none. |
+| POST | `/knowledgeDrop/document/create` | Token, file (a multipart `file` part) | Uses the file's original filename as the document name and its content type (for example, `application/pdf` or `text/plain`) as the MIME type. If the client already has a non-deleted document with that name, deletes its existing chunks and embeddings from Elasticsearch, replaces its content, and re-ingests it under the same document ID. Otherwise creates a new document. Stores the file, runs the ingestion pipeline, and returns the document ID and status `processing`. Errors on a missing filename, an unsupported type, or empty content. |
+| GET | `/knowledgeDrop/document/read` | Token, `documentName` | Looks up the client's non-deleted document with that name. Returns the content, ID, filename, type, upload time, and status, or HTTP 404 if there is none (including if it was deleted). Returns HTTP 400 if `documentName` is missing or blank. |
+| DELETE | `/knowledgeDrop/document/delete` | Token, `documentName` | Soft-deletes the client's non-deleted document with that name by setting `deleted_at` on its record, and removes its Elasticsearch chunk entries and embeddings so it no longer appears in search. Returns HTTP 404 if there is none, or HTTP 400 if `documentName` is missing or blank. |
+| GET | `/knowledgeDrop/document/list` | Token, optional `status`, `limit`, `offset` | Returns the client's documents with ID, filename, type, upload time, and status. Returns an empty list if there are none. |
 
 ### Question Answering and Similarity
 
@@ -161,15 +195,14 @@ curl -s -X POST localhost:8080/knowledgeDrop/registerClient \
 # => {"clientId":"...","clientToken":"..."}   (token is shown once)
 
 TOKEN=<clientToken>
-curl -s localhost:8080/knowledgeDrop/list -H "Authorization: Bearer $TOKEN"
+curl -s localhost:8080/knowledgeDrop/document/list -H "Authorization: Bearer $TOKEN"
 
-# create: JSON metadata part + binary file part
-curl -s -X POST localhost:8080/knowledgeDrop/create -H "Authorization: Bearer $TOKEN" \
-  -F 'metadata={"name":"policy.pdf","type":"pdf"};type=application/json' \
-  -F 'file=@policy.pdf;type=application/octet-stream'
+# create: a single file part; the document name is the file's name (policy.pdf)
+curl -s -X POST localhost:8080/knowledgeDrop/document/create -H "Authorization: Bearer $TOKEN" \
+  -F 'file=@policy.pdf;type=application/pdf'
 ```
 
-`create` and `update` use `multipart/form-data`: a `metadata` JSON part (`{"name": "...", "type": "pdf|text|image"}`, optionally `"text"` for raw text) and a `file` part. `update` metadata uses `{"documentId": "..."}` or `{"documentName": "..."}`.
+`create` uses `multipart/form-data` with a binary `file` part. The document name is the file's original filename, and the MIME type is the file's content type (the filename extension is used if the client sends `application/octet-stream`). Uploading again with the same filename replaces that document's content.
 
 ### Implementation status
 
@@ -178,11 +211,10 @@ Endpoint logic that is not built yet is marked with a `TODO:` comment that names
 | Endpoint | Status | Implement in |
 |---|---|---|
 | `POST registerClient` | **Built** (reference implementation) | `ClientService.register` |
-| `POST create` | To do | `DocumentService.create` |
-| `PUT update` | To do | `DocumentService.update` |
-| `GET read` | To do | `DocumentService.read` |
-| `DELETE delete` | To do | `DocumentService.delete` |
-| `GET list` | To do | `DocumentService.list` |
+| `POST document/create` (also replaces a same-name document) | To do | `DocumentService.create` |
+| `GET document/read` | To do | `DocumentService.read` |
+| `DELETE document/delete` | To do | `DocumentService.delete` |
+| `GET document/list` | To do | `DocumentService.list` |
 | `DELETE clientDrop` | To do | `ClientService.drop` |
 | `GET health` | To do | `HealthService.check` |
 | Ingestion pipeline (extract, chunk, keyword index) | To do | `IngestionService` |
