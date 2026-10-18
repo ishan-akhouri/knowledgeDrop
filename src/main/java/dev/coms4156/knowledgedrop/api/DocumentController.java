@@ -1,6 +1,6 @@
 package dev.coms4156.knowledgedrop.api;
 
-import dev.coms4156.knowledgedrop.api.dto.DocumentReadResponse;
+import dev.coms4156.knowledgedrop.api.dto.DocumentContent;
 import dev.coms4156.knowledgedrop.api.dto.DocumentStatusResponse;
 import dev.coms4156.knowledgedrop.api.dto.DocumentSummary;
 import dev.coms4156.knowledgedrop.api.dto.MessageResponse;
@@ -9,6 +9,7 @@ import dev.coms4156.knowledgedrop.model.ClientRecord;
 import dev.coms4156.knowledgedrop.security.AuthInterceptor;
 import dev.coms4156.knowledgedrop.service.DocumentService;
 import java.util.List;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -64,10 +65,14 @@ public class DocumentController {
 
   /** Returns the content and metadata of the client's non-deleted document. */
   @GetMapping("/read")
-  public DocumentReadResponse read(
+  public ResponseEntity<InputStreamResource> read(
       @RequestAttribute(AuthInterceptor.CLIENT_ATTRIBUTE) ClientRecord client,
       @RequestParam(value = "documentName", required = false) String documentName) {
-    return documentService.read(client, requireName(documentName));
+    DocumentContent documentContent = documentService.read(client, requireName(documentName));
+    return ResponseEntity.ok()
+        .contentType(MediaType.parseMediaType(documentContent.document().getType()))
+        .contentLength(documentContent.document().getFileBytes())
+        .body(new InputStreamResource(documentContent.stream()));
   }
 
   /** Soft-deletes the client's document with the given name. TODO(delete). */
