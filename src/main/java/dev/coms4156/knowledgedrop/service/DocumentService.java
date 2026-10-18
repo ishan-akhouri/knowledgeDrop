@@ -218,7 +218,8 @@ public class DocumentService {
    * Lists the caller's documents.
    *
    * @param client the authenticated caller
-   * @param status optional status filter: "processing", "ready", "failed" or "all" defaults to "all"
+   * @param status optional status filter: "processing", "ready", "failed" or "all"; defaults to
+   *     "all"
    * @param limit optional page size
    * @param offset optional number of documents to skip
    * @return matching documents, or an empty list if the client has none
