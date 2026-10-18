@@ -18,8 +18,13 @@ import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.AbstractPageRequest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.AbstractPageRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -213,8 +218,7 @@ public class DocumentService {
    * Lists the caller's documents.
    *
    * @param client the authenticated caller
-   * @param status optional status filter: "processing", "ready", "failed" or "all"; defaults to
-   *     "all"
+   * @param status optional status filter: "processing", "ready", "failed" or "all" defaults to "all"
    * @param limit optional page size
    * @param offset optional number of documents to skip
    * @return matching documents, or an empty list if the client has none
