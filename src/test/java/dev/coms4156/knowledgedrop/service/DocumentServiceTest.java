@@ -679,21 +679,14 @@ class DocumentServiceTest {
   }
 
   // ---------------------------------------------------------------------------------------------
-  // delete / list: still TODO, so they must fail clearly with 501
+  // delete: still TODO, so it must fail clearly with 501 (list is covered by
+  // DocumentServiceListTest)
   // ---------------------------------------------------------------------------------------------
 
   @Test
   void delete_notImplementedYet_throwsNotImplemented() {
     ApiException ex =
         assertThrows(ApiException.class, () -> documentService.delete(client, "notes.txt"));
-
-    assertEquals(HttpStatus.NOT_IMPLEMENTED, ex.getStatus());
-  }
-
-  @Test
-  void list_notImplementedYet_throwsNotImplemented() {
-    ApiException ex =
-        assertThrows(ApiException.class, () -> documentService.list(client, null, null, null));
 
     assertEquals(HttpStatus.NOT_IMPLEMENTED, ex.getStatus());
   }
