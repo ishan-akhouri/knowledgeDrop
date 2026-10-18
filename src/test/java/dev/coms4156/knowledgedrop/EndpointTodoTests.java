@@ -69,15 +69,6 @@ class EndpointTodoTests {
   @Disabled("TODO(delete)")
   void delete_documentNotOwnedByClient_returnsError() {}
 
-  // ---- GET /knowledgeDrop/document/list
-  @Test
-  @Disabled("TODO(list)")
-  void list_appliesStatusFilterAndPagination() {}
-
-  @Test
-  @Disabled("TODO(list)")
-  void list_clientWithNoDocuments_returnsEmptyList() {}
-
   // ---- DELETE /knowledgeDrop/clientDrop
   @Test
   @Disabled("TODO(clientDrop)")
