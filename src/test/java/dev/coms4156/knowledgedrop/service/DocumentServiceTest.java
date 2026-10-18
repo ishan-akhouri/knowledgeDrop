@@ -17,6 +17,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import dev.coms4156.knowledgedrop.api.dto.DocumentContent;
 import dev.coms4156.knowledgedrop.api.dto.DocumentStatusResponse;
 import dev.coms4156.knowledgedrop.config.KnowledgeDropProperties;
 import dev.coms4156.knowledgedrop.exception.ApiException;
@@ -25,6 +26,7 @@ import dev.coms4156.knowledgedrop.model.DocumentRecord;
 import dev.coms4156.knowledgedrop.model.DocumentStatus;
 import dev.coms4156.knowledgedrop.repository.DocumentRepository;
 import dev.coms4156.knowledgedrop.storage.FileStorage;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -434,16 +436,229 @@ class DocumentServiceTest {
   }
 
   // ---------------------------------------------------------------------------------------------
-  // read / delete / list: still TODO, so they must fail clearly with 501
+  // read: returning a document's metadata and stored content
+  // ---------------------------------------------------------------------------------------------
+
+  private DocumentRecord storedRecord(String name, long bytes, String hash) {
+    DocumentRecord record = new DocumentRecord(clientId, name, "text/plain", bytes, hash);
+    ReflectionTestUtils.setField(record, "id", UUID.randomUUID());
+    return record;
+  }
+
+  private void stubExisting(DocumentRecord record) {
+    when(documentRepository.findByOwnerIdAndNameAndDeletedAtIsNull(clientId, record.getName()))
+        .thenReturn(Optional.of(record));
+  }
+
+  /** Stubs storage so that every open of {@code name} yields a fresh stream over the content. */
+  private void stubStoredContent(String name, String content) throws IOException {
+    when(fileStorage.open(clientId, name))
+        .thenAnswer(
+            invocation -> new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8)));
+  }
+
+  @Test
+  void read_existingDocument_returnsItsRecord() throws Exception {
+    DocumentRecord record = storedRecord("notes.txt", 5L, HELLO_SHA1);
+    stubExisting(record);
+    stubStoredContent("notes.txt", "hello");
+
+    DocumentContent content = documentService.read(client, "notes.txt");
+
+    assertSame(record, content.document());
+    assertNotNull(content.stream());
+  }
+
+  @Test
+  void read_existingDocument_streamYieldsStoredContent() throws Exception {
+    stubExisting(storedRecord("notes.txt", 5L, HELLO_SHA1));
+    stubStoredContent("notes.txt", "hello");
+
+    DocumentContent content = documentService.read(client, "notes.txt");
+
+    try (InputStream in = content.stream()) {
+      assertEquals("hello", new String(in.readAllBytes(), StandardCharsets.UTF_8));
+    }
+  }
+
+  @Test
+  void read_emptyDocument_returnsEmptyStream() throws Exception {
+    stubExisting(storedRecord("empty.txt", 0L, EMPTY_SHA1));
+    stubStoredContent("empty.txt", "");
+
+    DocumentContent content = documentService.read(client, "empty.txt");
+
+    try (InputStream in = content.stream()) {
+      assertEquals(0, in.readAllBytes().length);
+    }
+  }
+
+  @Test
+  void read_lookupIsScopedToCallerAndFileName() throws Exception {
+    stubExisting(storedRecord("notes.txt", 5L, HELLO_SHA1));
+    stubStoredContent("notes.txt", "hello");
+
+    documentService.read(client, "notes.txt");
+
+    verify(documentRepository).findByOwnerIdAndNameAndDeletedAtIsNull(clientId, "notes.txt");
+    // Opened twice: once to verify the hash, then again so the returned stream is unread.
+    verify(fileStorage, times(2)).open(clientId, "notes.txt");
+  }
+
+  @Test
+  void read_doesNotModifyOrSaveAnyRecord() throws Exception {
+    stubExisting(storedRecord("notes.txt", 5L, HELLO_SHA1));
+    stubStoredContent("notes.txt", "hello");
+
+    documentService.read(client, "notes.txt");
+
+    verify(documentRepository, never()).save(any());
+    verifyNoInteractions(ingestionService);
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // read: failures
   // ---------------------------------------------------------------------------------------------
 
   @Test
-  void read_notImplementedYet_throwsNotImplemented() {
+  void read_documentNotFoundOrDeleted_throwsNotFoundWithoutOpeningFile() {
+    when(documentRepository.findByOwnerIdAndNameAndDeletedAtIsNull(clientId, "missing.txt"))
+        .thenReturn(Optional.empty());
+
+    ApiException ex =
+        assertThrows(ApiException.class, () -> documentService.read(client, "missing.txt"));
+
+    assertEquals(HttpStatus.NOT_FOUND, ex.getStatus());
+    verifyNoInteractions(fileStorage);
+  }
+
+  @Test
+  void read_nullClient_throwsBadRequestWithoutTouchingStorage() {
+    ApiException ex =
+        assertThrows(ApiException.class, () -> documentService.read(null, "notes.txt"));
+
+    assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
+    verifyNoInteractions(documentRepository, fileStorage);
+  }
+
+  @Test
+  void read_lookupFails_throwsNotFoundWithoutOpeningFile() {
+    when(documentRepository.findByOwnerIdAndNameAndDeletedAtIsNull(clientId, "notes.txt"))
+        .thenThrow(new IllegalStateException("db down"));
+
     ApiException ex =
         assertThrows(ApiException.class, () -> documentService.read(client, "notes.txt"));
 
-    assertEquals(HttpStatus.NOT_IMPLEMENTED, ex.getStatus());
+    // The service treats any lookup failure as "document not found".
+    assertEquals(HttpStatus.NOT_FOUND, ex.getStatus());
+    verifyNoInteractions(fileStorage);
   }
+
+  @Test
+  void read_storedFileMissing_throwsInternalServerError() throws Exception {
+    stubExisting(storedRecord("notes.txt", 5L, HELLO_SHA1));
+    when(fileStorage.open(clientId, "notes.txt")).thenThrow(new IOException("no such file"));
+
+    ApiException ex =
+        assertThrows(ApiException.class, () -> documentService.read(client, "notes.txt"));
+
+    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatus());
+  }
+
+  @Test
+  void read_fileNameRejectedByStorage_throwsInternalServerError() throws Exception {
+    stubExisting(storedRecord("../evil.txt", 5L, HELLO_SHA1));
+    when(fileStorage.open(clientId, "../evil.txt"))
+        .thenThrow(new IllegalArgumentException("Invalid file name"));
+
+    ApiException ex =
+        assertThrows(ApiException.class, () -> documentService.read(client, "../evil.txt"));
+
+    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatus());
+  }
+
+  @Test
+  void read_storedContentDoesNotMatchHash_throwsInternalServerError() throws Exception {
+    stubExisting(storedRecord("notes.txt", 5L, HELLO_SHA1));
+    stubStoredContent("notes.txt", "tampered");
+
+    ApiException ex =
+        assertThrows(ApiException.class, () -> documentService.read(client, "notes.txt"));
+
+    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatus());
+  }
+
+  @Test
+  void read_storedContentUnreadable_throwsInternalServerError() throws Exception {
+    stubExisting(storedRecord("notes.txt", 5L, HELLO_SHA1));
+    InputStream failing =
+        new InputStream() {
+          @Override
+          public int read() throws IOException {
+            throw new IOException("read failed");
+          }
+        };
+    when(fileStorage.open(clientId, "notes.txt")).thenReturn(failing);
+
+    ApiException ex =
+        assertThrows(ApiException.class, () -> documentService.read(client, "notes.txt"));
+
+    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatus());
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // read: with real file storage
+  // ---------------------------------------------------------------------------------------------
+
+  /** Creates a document through real storage and makes the mocked repository find it by name. */
+  private DocumentService createThenExpose(Path dataDir, String name, String content) {
+    saveAssignsIds();
+    DocumentService service = serviceWithRealStorage(dataDir);
+    service.create(client, textFile(name, content));
+    ArgumentCaptor<DocumentRecord> captor = ArgumentCaptor.forClass(DocumentRecord.class);
+    verify(documentRepository).save(captor.capture());
+    when(documentRepository.findByOwnerIdAndNameAndDeletedAtIsNull(clientId, name))
+        .thenReturn(Optional.of(captor.getValue()));
+    return service;
+  }
+
+  @Test
+  void read_realStorage_returnsContentWrittenByCreate(@TempDir Path dataDir) throws Exception {
+    DocumentService service = createThenExpose(dataDir, "notes.txt", "hello");
+
+    DocumentContent content = service.read(client, "notes.txt");
+
+    assertEquals("notes.txt", content.document().getName());
+    try (InputStream in = content.stream()) {
+      assertEquals("hello", new String(in.readAllBytes(), StandardCharsets.UTF_8));
+    }
+  }
+
+  @Test
+  void read_realStorage_fileChangedOnDiskAfterUpload_throwsInternalServerError(
+      @TempDir Path dataDir) throws Exception {
+    DocumentService service = createThenExpose(dataDir, "notes.txt", "hello");
+    Files.writeString(dataDir.resolve(clientId.toString()).resolve("notes.txt"), "tampered");
+
+    ApiException ex = assertThrows(ApiException.class, () -> service.read(client, "notes.txt"));
+
+    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatus());
+  }
+
+  @Test
+  void read_realStorage_fileDeletedFromDisk_throwsInternalServerError(@TempDir Path dataDir)
+      throws Exception {
+    DocumentService service = createThenExpose(dataDir, "notes.txt", "hello");
+    Files.delete(dataDir.resolve(clientId.toString()).resolve("notes.txt"));
+
+    ApiException ex = assertThrows(ApiException.class, () -> service.read(client, "notes.txt"));
+
+    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatus());
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // delete / list: still TODO, so they must fail clearly with 501
+  // ---------------------------------------------------------------------------------------------
 
   @Test
   void delete_notImplementedYet_throwsNotImplemented() {
