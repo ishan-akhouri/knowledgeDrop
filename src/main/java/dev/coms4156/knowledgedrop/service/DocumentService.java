@@ -7,6 +7,7 @@ import dev.coms4156.knowledgedrop.api.dto.MessageResponse;
 import dev.coms4156.knowledgedrop.exception.ApiException;
 import dev.coms4156.knowledgedrop.model.ClientRecord;
 import dev.coms4156.knowledgedrop.model.DocumentRecord;
+import dev.coms4156.knowledgedrop.model.DocumentStatus;
 import dev.coms4156.knowledgedrop.repository.DocumentRepository;
 import dev.coms4156.knowledgedrop.storage.FileStorage;
 import java.io.IOException;
@@ -16,8 +17,13 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.AbstractPageRequest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -207,17 +213,94 @@ public class DocumentService {
    * Lists the caller's documents.
    *
    * @param client the authenticated caller
-   * @param status optional status filter: "processing", "ready", or "failed"
+   * @param status optional status filter: "processing", "ready", "failed" or "all" defaults to "all"
    * @param limit optional page size
    * @param offset optional number of documents to skip
    * @return matching documents, or an empty list if the client has none
    */
   public List<DocumentSummary> list(
       ClientRecord client, String status, Integer limit, Integer offset) {
-    // TODO: list: parse status via DocumentStatus.fromValue; apply defaults for limit/offset.
-    // TODO: list: query DocumentRepository (findByOwnerId / findByOwnerIdAndStatus). The
-    //   repository is page-based, so convert limit/offset into a Pageable.
-    throw ApiException.notImplemented("GET /knowledgeDrop/document/list");
+    UUID clientId;
+    try {
+      clientId = client.getId();
+    } catch (Exception e) {
+      throw ApiException.badRequest(
+          "Failed to extract information from request: " + e.getMessage());
+    }
+    int pageSize = (limit == null || limit <= 0) ? Integer.MAX_VALUE : limit;
+    long skip = (offset == null || offset < 0) ? 0 : offset;
+    Pageable pageable = new OffsetPageRequest(skip, pageSize);
+
+    Page<DocumentRecord> page;
+    if (status == null || status.isBlank() || status.trim().equalsIgnoreCase("all")) {
+      page = documentRepository.findByOwnerIdAndDeletedAtIsNull(clientId, pageable);
+    } else {
+      DocumentStatus parsedStatus = DocumentStatus.fromValue(status);
+      page = documentRepository.findByOwnerIdAndStatusAndDeletedAtIsNull(
+          clientId, parsedStatus, pageable);
+    }
+    return page.getContent().stream()
+        .map(d -> new DocumentSummary(
+            d.getId(), d.getName(), d.getType(), d.getUploadedAt(), d.getStatus()))
+        .toList();
+  }
+
+  /**
+   * A {@link Pageable} addressed by an arbitrary row offset rather than a page number, since the
+   * API's {@code offset} need not be a multiple of {@code limit}. Newest uploads come first.
+   */
+  private static final class OffsetPageRequest extends AbstractPageRequest {
+    private static final long serialVersionUID = 1L;
+    private static final Sort SORT = Sort.by(Sort.Direction.DESC, "uploadedAt");
+
+    private final long offset;
+
+    OffsetPageRequest(long offset, int size) {
+      super(0, size);
+      this.offset = offset;
+    }
+
+    @Override
+    public long getOffset() {
+      return offset;
+    }
+
+    @Override
+    public Sort getSort() {
+      return SORT;
+    }
+
+    @Override
+    public Pageable next() {
+      return new OffsetPageRequest(offset + getPageSize(), getPageSize());
+    }
+
+    @Override
+    public Pageable previous() {
+      return new OffsetPageRequest(Math.max(0, offset - getPageSize()), getPageSize());
+    }
+
+    @Override
+    public Pageable first() {
+      return new OffsetPageRequest(0, getPageSize());
+    }
+
+    @Override
+    public Pageable withPage(int pageNumber) {
+      return new OffsetPageRequest((long) pageNumber * getPageSize(), getPageSize());
+    }
+
+    @Override
+    public boolean equals(Object other) {
+      return other instanceof OffsetPageRequest that
+          && offset == that.offset
+          && getPageSize() == that.getPageSize();
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(offset, getPageSize());
+    }
   }
 
   /**
