@@ -55,4 +55,11 @@ public interface DocumentRepository extends JpaRepository<DocumentRecord, UUID> 
       @Param("ownerId") UUID ownerId,
       @Param("name") String name,
       @Param("deletedAt") Instant deletedAt);
+
+  /** Lists one client's non-deleted documents, one page at a time. */
+  Page<DocumentRecord> findByOwnerIdAndDeletedAtIsNull(UUID ownerId, Pageable pageable);
+
+  /** Lists one client's non-deleted documents with the given status, one page at a time. */
+  Page<DocumentRecord> findByOwnerIdAndStatusAndDeletedAtIsNull(
+      UUID ownerId, DocumentStatus status, Pageable pageable);
 }
