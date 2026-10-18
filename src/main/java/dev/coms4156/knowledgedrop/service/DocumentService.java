@@ -1,6 +1,6 @@
 package dev.coms4156.knowledgedrop.service;
 
-import dev.coms4156.knowledgedrop.api.dto.DocumentReadResponse;
+import dev.coms4156.knowledgedrop.api.dto.DocumentContent;
 import dev.coms4156.knowledgedrop.api.dto.DocumentStatusResponse;
 import dev.coms4156.knowledgedrop.api.dto.DocumentSummary;
 import dev.coms4156.knowledgedrop.api.dto.MessageResponse;
@@ -122,15 +122,54 @@ public class DocumentService {
    * <p>Only the client's non-deleted (deletedAt is null) document with this name is returned.
    *
    * @param client the authenticated caller
-   * @param name the document name (the original filename it was created with)
+   * @param fileName the document name (the original filename it was created with)
    * @return content, document ID, filename, type, upload time, and status
    */
-  public DocumentReadResponse read(ClientRecord client, String name) {
-    // TODO: read: look up the non-deleted document for this client and name via
-    //   DocumentRepository.findByOwnerIdAndNameAndDeletedAtIsNull(client.getId(), name); return 404
-    //   with a reason if missing (soft-deleted documents count as missing).
-    // TODO: read: load the stored content from file storage and map to DocumentReadResponse.
-    throw ApiException.notImplemented("GET /knowledgeDrop/document/read");
+  public DocumentContent read(ClientRecord client, String fileName) {
+    UUID clientId;
+    InputStream fileStream;
+    String sha1Hash;
+    DocumentRecord document;
+    try {
+      clientId = client.getId();
+    } catch (Exception e) {
+      throw ApiException.badRequest(
+          "Failed to extract information from request: " + e.getMessage());
+    }
+    try {
+      Optional<DocumentRecord> documentOpt =
+          documentRepository.findByOwnerIdAndNameAndDeletedAtIsNull(clientId, fileName);
+      if (documentOpt.isEmpty()) {
+        throw ApiException.notFound("Document not found or has been deleted");
+      }
+      document = documentOpt.get();
+    } catch (Exception e) {
+      throw ApiException.notFound("Document not found or has been deleted");
+    }
+    try {
+      fileStream = fileStorage.open(clientId, fileName);
+      sha1Hash = document.getContentHash();
+    } catch (Exception e) {
+      throw ApiException.internalServerError("Failed to read file content: " + e.getMessage());
+    }
+
+    try {
+      String computedHash = computeSha1Hash(fileStream);
+      if (!computedHash.equals(sha1Hash)) {
+        throw ApiException.internalServerError("File content hash mismatch");
+      }
+    } catch (IOException e) {
+      throw ApiException.internalServerError("Failed to compute file hash: " + e.getMessage());
+    } catch (Exception e) {
+      throw ApiException.internalServerError("Unexpected error: " + e.getMessage());
+    }
+    try {
+      fileStream = fileStorage.open(clientId, fileName);
+    } catch (Exception e) {
+      throw ApiException.internalServerError("Failed to reopen file content: " + e.getMessage());
+    }
+
+    return new DocumentContent(document, fileStream);
   }
 
   /**
