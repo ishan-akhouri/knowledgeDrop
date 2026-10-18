@@ -99,6 +99,7 @@ erDiagram
 - **Document names:** a document's name is the original filename of the uploaded file. `read` and `delete` identify a document by its name (the `documentName` query parameter), so names are unique per client among non-deleted documents. Soft-deleted documents are ignored by name lookups, so a deleted name can be reused by a later `create`. Uploading a file whose name matches one of the client's existing documents soft-deletes that document and stores the upload as a new document with a new document ID, which is then ingested. `create` returns HTTP 400 if the upload has no filename.
 - **Upload requirements:** an uploaded file must not be empty, must not be larger than 10 GB, and must have a non-blank filename (the filename becomes the document name). `create` rejects any upload that breaks these rules.
 - **Ingestion pipeline:** `create` extracts text (direct read for text files, text extraction for PDFs, OCR for images, keeping page numbers), splits it into chunks, embeds each chunk into the Elasticsearch vector store, and indexes each chunk's text in Elasticsearch for keyword search. Ingestion runs in the background, so `create` returns `202 Accepted` with status `processing`.
+- **Responses:** endpoints return JSON, except `document/read`, which returns the raw file bytes with the document's own content type.
 - **Errors:** always `{"error": "Not Found", "reason": "..."}`.
 
 ## API Reference
@@ -117,7 +118,7 @@ All paths are under `/knowledgeDrop`. Document management endpoints are grouped 
 | Method | Endpoint | Inputs | Behavior |
 |---|---|---|---|
 | POST | `/knowledgeDrop/document/create` | Token, file (a multipart `file` part) | Uses the file's original filename as the document name and its content type (for example, `application/pdf` or `text/plain`) as the MIME type. If the client already has a non-deleted document with that name, soft-deletes it and removes its chunks and embeddings from Elasticsearch, so the old document no longer appears in search. Always creates a new document with a new document ID, stores the file, runs the ingestion pipeline, and returns the new document ID and status `processing`. Errors on a missing or blank filename, an unsupported type, empty content, or a file larger than 10 GB. |
-| GET | `/knowledgeDrop/document/read` | Token, `documentName` | Looks up the client's non-deleted document with that name. Returns the content, ID, filename, type, upload time, and status, or HTTP 404 if there is none (including if it was deleted). Returns HTTP 400 if `documentName` is missing or blank. |
+| GET | `/knowledgeDrop/document/read` | Token, `documentName` | Looks up the client's non-deleted document with that name. Returns the stored file itself as the raw response body (a Spring `ResponseEntity<InputStreamResource>`, streamed from storage), not a JSON object. The `Content-Type` header is the document's stored MIME type and `Content-Length` is its size in bytes. Returns HTTP 404 (JSON error body) if there is none (including if it was deleted), or HTTP 400 if `documentName` is missing or blank. Use `document/list` to get a document's ID, type, upload time, and status. |
 | DELETE | `/knowledgeDrop/document/delete` | Token, `documentName` | Soft-deletes the client's non-deleted document with that name by setting `deleted_at` on its record, and removes its Elasticsearch chunk entries and embeddings so it no longer appears in search. Returns HTTP 404 if there is none, or HTTP 400 if `documentName` is missing or blank. |
 | GET | `/knowledgeDrop/document/list` | Token, optional `status`, `limit`, `offset` | Returns the client's documents with ID, filename, type, upload time, and status. Returns an empty list if there are none. |
 
@@ -201,6 +202,10 @@ curl -s localhost:8080/knowledgeDrop/document/list -H "Authorization: Bearer $TO
 # create: a single file part; the document name is the file's name (policy.pdf)
 curl -s -X POST localhost:8080/knowledgeDrop/document/create -H "Authorization: Bearer $TOKEN" \
   -F 'file=@policy.pdf;type=application/pdf'
+
+# read: returns the file itself, so save it to disk with -o
+curl -s -G localhost:8080/knowledgeDrop/document/read -H "Authorization: Bearer $TOKEN" \
+  --data-urlencode 'documentName=policy.pdf' -o policy-downloaded.pdf
 ```
 
 `create` uses `multipart/form-data` with a binary `file` part. The document name is the file's original filename, and the MIME type is the file's content type (the filename extension is used if the client sends `application/octet-stream`). Uploading again with the same filename soft-deletes the earlier document and creates a new one with a new document ID.
