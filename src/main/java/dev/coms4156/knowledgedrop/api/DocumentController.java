@@ -6,10 +6,15 @@ import dev.coms4156.knowledgedrop.api.dto.DocumentSummary;
 import dev.coms4156.knowledgedrop.api.dto.MessageResponse;
 import dev.coms4156.knowledgedrop.exception.ApiException;
 import dev.coms4156.knowledgedrop.model.ClientRecord;
+import dev.coms4156.knowledgedrop.model.DocumentRecord;
 import dev.coms4156.knowledgedrop.security.AuthInterceptor;
 import dev.coms4156.knowledgedrop.service.DocumentService;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.springframework.core.io.InputStreamResource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -69,10 +74,19 @@ public class DocumentController {
       @RequestAttribute(AuthInterceptor.CLIENT_ATTRIBUTE) ClientRecord client,
       @RequestParam(value = "documentName", required = false) String documentName) {
     DocumentContent documentContent = documentService.read(client, requireName(documentName));
+    
+    DocumentRecord document = documentContent.document();
+    InputStream stream = documentContent.stream();
+
+    ContentDisposition disposition = ContentDisposition.attachment()
+        .filename(document.getName(), StandardCharsets.UTF_8)
+        .build();
+
     return ResponseEntity.ok()
-        .contentType(MediaType.parseMediaType(documentContent.document().getType()))
-        .contentLength(documentContent.document().getFileBytes())
-        .body(new InputStreamResource(documentContent.stream()));
+        .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+        .contentType(MediaType.parseMediaType(document.getType()))
+        .contentLength(document.getFileBytes())
+        .body(new InputStreamResource(stream));
   }
 
   /** Soft-deletes the client's document with the given name. TODO(delete). */
