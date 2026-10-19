@@ -9,11 +9,9 @@ import java.util.UUID;
  *
  * <p>Every method is scoped to one client so one client can never see another's chunks.
  *
- * <p>TODO: vector-store: write {@code ElasticsearchVectorStore implements VectorStore}. Create an
- * index (see docker-compose.yml for the local Elasticsearch node) with a {@code dense_vector}
- * field whose {@code dims} equals {@link EmbeddingClient#dimensions()} and a similarity matching
- * the embedding model (for example cosine), plus keyword fields for clientId and documentId so
- * queries can filter. Search with a kNN query that filters by clientId.
+ * <p>Implemented by {@link ElasticsearchVectorStore}. Callers index a document's vectors only
+ * once ingestion has succeeded, and delete them if it fails, so only chunks of ready documents
+ * are ever searchable.
  */
 public interface VectorStore {
 
