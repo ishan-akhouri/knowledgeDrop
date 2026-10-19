@@ -8,6 +8,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
@@ -19,14 +20,24 @@ import java.util.regex.Pattern;
  * record's ID.
  *
  * <p>Document names are unique per client among non-deleted documents so that "document ID or
- * document name" lookups are unambiguous. Because deletes are soft ({@code deletedAt}), this is
- * not a database constraint; queries must filter out deleted records.
+ * document name" lookups are unambiguous. Because deletes are soft ({@code deletedAt}), a plain
+ * unique constraint on (owner, name) would block re-uploading a deleted name. Instead the database
+ * enforces uniqueness on {@code activeKey}, which holds {@code ownerId/name} while {@code
+ * deletedAt} is null and is null once the document is deleted. Unique constraints allow multiple
+ * nulls, so any number of deleted documents may share a name. Queries must still filter out
+ * deleted records.
  */
 @Entity
-@Table(name = "documents")
+@Table(
+    name = "documents",
+    uniqueConstraints =
+        @UniqueConstraint(name = "uk_documents_active_owner_name", columnNames = "active_key"))
 public class DocumentRecord {
 
   private static final int MAX_REASON_LENGTH = 1000;
+
+  /** Room for a 36-character owner UUID, a separator, and the default 255-character name. */
+  private static final int MAX_ACTIVE_KEY_LENGTH = 320;
 
   /** A SHA-1 digest as 40 lowercase hexadecimal characters. */
   private static final Pattern SHA1_HEX = Pattern.compile("[0-9a-f]{40}");
@@ -65,6 +76,13 @@ public class DocumentRecord {
   @Column(name = "deleted_at")
   private Instant deletedAt;
 
+  /**
+   * {@code ownerId/name} while the document is not deleted, null once it is. Unique, which makes
+   * (owner, name) unique among non-deleted documents. Derived; never set directly.
+   */
+  @Column(name = "active_key", length = MAX_ACTIVE_KEY_LENGTH)
+  private String activeKey;
+
   /** Required by JPA. */
   protected DocumentRecord() {}
 
@@ -93,6 +111,7 @@ public class DocumentRecord {
     this.fileBytes = fileBytes;
     this.contentHash = contentHash;
     this.uploadedAt = Instant.now();
+    refreshActiveKey();
   }
 
   /** Marks the document as being (re-)ingested and clears any earlier failure. */
@@ -152,28 +171,6 @@ public class DocumentRecord {
     return contentHash;
   }
 
-  /**
-   * Replaces the size and SHA-1 hash of the document content, for when an existing record's
-   * content is replaced (a new record gets them through the constructor).
-   *
-   * <p>SHA-1 produces a 160-bit (20-byte) digest, stored as 40 lowercase hex characters.
-   *
-   * <p>The hash is computed by the caller (the service layer, which has access to the uploaded
-   * file); this method only validates and stores the result. Both fields are set together, and
-   * neither is changed if validation fails.
-   *
-   * @param fileBytes size of the content in bytes; must not be negative
-   * @param contentHash SHA-1 of the content as 40 lowercase hex characters
-   * @throws NullPointerException if {@code contentHash} is null
-   * @throws IllegalArgumentException if {@code fileBytes} is negative or {@code contentHash} is
-   *     not 40 lowercase hex characters
-   */
-  public void recordContent(long fileBytes, String contentHash) {
-    validateContent(fileBytes, contentHash);
-    this.fileBytes = fileBytes;
-    this.contentHash = contentHash;
-  }
-
   private static void validateContent(long fileBytes, String contentHash) {
     Objects.requireNonNull(contentHash, "contentHash must not be null");
     if (fileBytes < 0) {
@@ -193,7 +190,19 @@ public class DocumentRecord {
     return deletedAt;
   }
 
+  /**
+   * Sets or clears the soft-delete marker. Setting it frees this document's name for reuse by the
+   * same client; clearing it claims the name again, which fails at save time if another
+   * non-deleted document now holds it.
+   *
+   * @param deletedAt deletion time, or null to mark the document as not deleted
+   */
   public void setDeletedAt(Instant deletedAt) {
     this.deletedAt = deletedAt;
+    refreshActiveKey();
+  }
+
+  private void refreshActiveKey() {
+    this.activeKey = deletedAt == null ? ownerId + "/" + name : null;
   }
 }
