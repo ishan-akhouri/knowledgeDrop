@@ -8,7 +8,6 @@ import dev.coms4156.knowledgedrop.exception.ApiException;
 import dev.coms4156.knowledgedrop.model.ClientRecord;
 import dev.coms4156.knowledgedrop.model.DocumentRecord;
 import dev.coms4156.knowledgedrop.model.DocumentStatus;
-import dev.coms4156.knowledgedrop.model.DocumentStatus;
 import dev.coms4156.knowledgedrop.repository.DocumentRepository;
 import dev.coms4156.knowledgedrop.storage.FileStorage;
 import java.io.IOException;
