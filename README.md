@@ -164,7 +164,7 @@ docker compose up -d     # PostgreSQL, Elasticsearch
 docker compose down      # stop the datastores (add -v to wipe their data)
 ```
 
-Defaults match `src/main/resources/application.yml`. **Tests do not need Docker**: they run against in-memory H2 (`application-test.yml`).
+Defaults match `src/main/resources/application.yml`. Tests use in-memory H2 for the database (`application-test.yml`), but the Elasticsearch integration tests need Elasticsearch running, so run `docker compose up -d` before `./mvnw verify`.
 
 If `./mvnw` says permission denied, run `chmod +x mvnw`.
 
@@ -176,7 +176,7 @@ Settings and secrets live in a local `.env` file, which is gitignored. Copy the 
 cp .env.example .env
 ```
 
-Spring loads `.env` on startup (`spring.config.import`) and Docker Compose reads it too, so one file drives both. A missing `.env` is fine: every value has a local default, which is why tests and CI need no setup.
+Spring loads `.env` on startup (`spring.config.import`) and Docker Compose reads it too, so one file drives both. A missing `.env` is fine: every value has a local default.
 
 | Variable | Used for |
 |---|---|

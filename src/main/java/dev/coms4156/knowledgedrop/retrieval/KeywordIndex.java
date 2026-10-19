@@ -9,9 +9,9 @@ import java.util.UUID;
  * <p>Every method is scoped to one client. Elasticsearch is also the source of chunk text in
  * document order, which summarize reads.
  *
- * <p>TODO: keyword-index: write {@code ElasticsearchKeywordIndex implements KeywordIndex}.
- * Index fields: chunkId, clientId (keyword), documentId (keyword), page, position (integer, for
- * ordering), text (analyzed text). Always filter by clientId in the query.
+ * <p>Implemented by {@link ElasticsearchKeywordIndex}. Callers index a document's chunks only
+ * once ingestion has succeeded, and delete them if it fails, so only chunks of ready documents
+ * are ever searchable.
  */
 public interface KeywordIndex {
 
