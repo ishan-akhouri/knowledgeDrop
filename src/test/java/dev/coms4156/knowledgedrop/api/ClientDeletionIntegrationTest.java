@@ -30,12 +30,16 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
@@ -67,7 +71,7 @@ class ClientDeletionIntegrationTest {
     final UUID previous = document(owner.clientId(), Instant.EPOCH);
     final UUID unrelated = document(other.clientId(), null);
 
-    mockMvc.perform(delete("/knowledgeDrop/client/{clientId}", owner.clientId())
+    mockMvc.perform(deleteRequest(owner.clientId())
             .header(HttpHeaders.AUTHORIZATION, "Bearer " + owner.clientToken()))
         .andExpect(status().isOk());
 
@@ -80,7 +84,7 @@ class ClientDeletionIntegrationTest {
     mockMvc.perform(get("/knowledgeDrop/document/list")
             .header(HttpHeaders.AUTHORIZATION, "Bearer " + owner.clientToken()))
         .andExpect(status().isUnauthorized());
-    mockMvc.perform(delete("/knowledgeDrop/client/{clientId}", owner.clientId())
+    mockMvc.perform(deleteRequest(owner.clientId())
             .header(HttpHeaders.AUTHORIZATION, "Bearer " + owner.clientToken()))
         .andExpect(status().isUnauthorized());
     assertEquals(deletedAt,
@@ -91,7 +95,7 @@ class ClientDeletionIntegrationTest {
   @Test
   void deleteClient_withoutDocuments_succeeds() throws Exception {
     RegisterClientResponse owner = clientService.register("billing-system");
-    mockMvc.perform(delete("/knowledgeDrop/client/{clientId}", owner.clientId())
+    mockMvc.perform(deleteRequest(owner.clientId())
             .header(HttpHeaders.AUTHORIZATION, "Bearer " + owner.clientToken()))
         .andExpect(status().isOk());
     assertNotNull(clientRepository.findById(owner.clientId()).orElseThrow().getDeletedAt());
@@ -103,7 +107,7 @@ class ClientDeletionIntegrationTest {
     RegisterClientResponse owner = clientService.register("billing-system");
     RegisterClientResponse other = clientService.register("search-system");
     final UUID documentId = document(owner.clientId(), null);
-    mockMvc.perform(delete("/knowledgeDrop/client/{clientId}", owner.clientId())
+    mockMvc.perform(deleteRequest(owner.clientId())
             .header(HttpHeaders.AUTHORIZATION, "Bearer " + other.clientToken()))
         .andExpect(status().isForbidden());
     assertNull(clientRepository.findById(owner.clientId()).orElseThrow().getDeletedAt());
@@ -114,15 +118,34 @@ class ClientDeletionIntegrationTest {
   @Test
   void deleteClient_invalidRequests_areRejected() throws Exception {
     RegisterClientResponse owner = clientService.register("billing-system");
-    mockMvc.perform(delete("/knowledgeDrop/client/{clientId}", owner.clientId()))
+    mockMvc.perform(deleteRequest(owner.clientId()))
         .andExpect(status().isUnauthorized());
-    mockMvc.perform(delete("/knowledgeDrop/client/{clientId}", owner.clientId())
+    mockMvc.perform(deleteRequest(owner.clientId())
             .header(HttpHeaders.AUTHORIZATION, "Bearer invalid"))
         .andExpect(status().isUnauthorized());
-    mockMvc.perform(delete("/knowledgeDrop/client/not-a-uuid")
+    mockMvc.perform(delete("/knowledgeDrop/client/delete").contentType(MediaType.APPLICATION_JSON)
+            .content("{\"clientId\":\"not-a-uuid\"}")
             .header(HttpHeaders.AUTHORIZATION, "Bearer " + owner.clientToken()))
         .andExpect(status().isBadRequest());
     assertNull(clientRepository.findById(owner.clientId()).orElseThrow().getDeletedAt());
+  }
+
+  /** Verifies missing, null, empty, and malformed deletion bodies leave the client unchanged. */
+  @ParameterizedTest
+  @ValueSource(strings = {"", "{}", "null", "{\"clientId\":null}",
+      "{\"clientId\":\"\"}", "not json"})
+  void deleteClient_invalidBody_returnsBadRequest(String body) throws Exception {
+    RegisterClientResponse owner = clientService.register("billing-system");
+    mockMvc.perform(delete("/knowledgeDrop/client/delete").contentType(MediaType.APPLICATION_JSON)
+            .content(body)
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + owner.clientToken()))
+        .andExpect(status().isBadRequest());
+    assertNull(clientRepository.findById(owner.clientId()).orElseThrow().getDeletedAt());
+  }
+
+  private static MockHttpServletRequestBuilder deleteRequest(UUID clientId) {
+    return delete("/knowledgeDrop/client/delete").contentType(MediaType.APPLICATION_JSON)
+        .content("{\"clientId\":\"" + clientId + "\"}");
   }
 
   /** Verifies the service's own transaction restores the client if updating documents fails. */

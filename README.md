@@ -110,12 +110,13 @@ All paths are under `/knowledgeDrop`. Document management endpoints are grouped 
 | Method | Endpoint | Inputs | Behavior |
 |---|---|---|---|
 | POST | `/knowledgeDrop/client/register` | JSON body with a required `name` field | Returns HTTP 201 with `clientId` (UUID) and `clientToken`. Stores only the SHA-256 token hash. Names may repeat; invalid or missing fields return HTTP 400. |
-| DELETE | `/knowledgeDrop/client/{clientId}` | Bearer token, client UUID in the path | Only the token owner can delete itself (otherwise HTTP 403). Returns HTTP 200 with a confirmation; soft-deletes the client and all owned documents in one transaction using the same timestamp. |
+| DELETE | `/knowledgeDrop/client/delete` | Bearer token, JSON body with required `clientId` (UUID) | Only the token owner can delete itself (otherwise HTTP 403). Returns HTTP 200 with a confirmation; soft-deletes the client and all owned documents in one transaction using the same timestamp. |
 
 Registration replaces the former `/knowledgeDrop/registerClient` JSON-body endpoint.
 The system name must be nonblank and at most 255 characters; surrounding whitespace is removed.
-The returned token contains 256 random bits and is shown only in the registration response.
 New clients have `deleted_at = NULL`; deleted clients cannot authenticate.
+Delete requests use `Content-Type: application/json` with a body such as
+`{"clientId":"123e4567-e89b-42d3-a456-426614174000"}` and the client's bearer token.
 Deleting a client sets `deleted_at` on every owned document, including previously deleted
 documents, to the client deletion timestamp. Rows, token hashes, files, and Elasticsearch
 data are retained. Subsequent requests using the deleted client’s token return HTTP 401.
@@ -124,6 +125,21 @@ Local development data is disposable. If your database still uses the former `fi
 `last_name`, or `is_active` columns, stop the application and run `docker compose down -v` to wipe the PostgreSQL and
 Elasticsearch data volumes, then run `docker compose up -d` and restart the application.
 Hibernate creates the current schema in the fresh database; no migration is needed.
+
+#### Client tokens
+
+Registration uses Java's `SecureRandom` to generate 32 random bytes (256 bits), encoded as
+URL-safe Base64 without padding. This original token is returned once as `clientToken`.
+The database stores only its SHA-256 hash in `clients.token_hash` (64 lowercase hexadecimal
+characters), never the plaintext token.
+
+Clients send the original token as `Authorization: Bearer <clientToken>` on protected requests.
+The server hashes that token with SHA-256 and looks up the matching client. The same token always
+produces the same hash, so no decryption is needed. Authentication succeeds only if a matching
+client exists and its `deleted_at` is null; otherwise the request returns HTTP 401.
+Clients can only delete themselves. The supplied `clientId` must match the client associated
+with the bearer token; attempting to delete another client returns HTTP 403.
+Registration and health checks require no token.
 
 ### Document Management
 
@@ -230,7 +246,7 @@ Endpoint logic that is not built yet is marked with a `TODO:` comment that names
 | `GET document/read` | To do | `DocumentService.read` |
 | `DELETE document/delete` | To do | `DocumentService.delete` |
 | `GET document/list` | To do | `DocumentService.list` |
-| `DELETE client/{clientId}` | **Built** | `ClientService.delete` |
+| `DELETE client/delete` | **Built** | `ClientService.delete` |
 | `GET health` | To do | `HealthService.check` |
 | Ingestion pipeline (extract, chunk, keyword index) | To do | `IngestionService` |
 | `POST ask` | **DEFERRED** (LLM + embeddings) | `AskService.ask` |

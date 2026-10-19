@@ -1,5 +1,6 @@
 package dev.coms4156.knowledgedrop.api;
 
+import dev.coms4156.knowledgedrop.api.dto.DeleteClientRequest;
 import dev.coms4156.knowledgedrop.api.dto.MessageResponse;
 import dev.coms4156.knowledgedrop.api.dto.RegisterClientRequest;
 import dev.coms4156.knowledgedrop.api.dto.RegisterClientResponse;
@@ -7,11 +8,9 @@ import dev.coms4156.knowledgedrop.model.ClientRecord;
 import dev.coms4156.knowledgedrop.security.AuthInterceptor;
 import dev.coms4156.knowledgedrop.service.ClientService;
 import jakarta.validation.Valid;
-import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -43,10 +42,10 @@ public class ClientController {
   }
 
   /** Soft-deletes the calling client and all owned documents. */
-  @DeleteMapping("/{clientId}")
+  @DeleteMapping("/delete")
   public MessageResponse deleteClient(
       @RequestAttribute(AuthInterceptor.CLIENT_ATTRIBUTE) ClientRecord client,
-      @PathVariable("clientId") UUID clientId) {
-    return clientService.delete(client, clientId);
+      @Valid @RequestBody DeleteClientRequest request) {
+    return clientService.delete(client, request.clientId());
   }
 }
