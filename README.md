@@ -150,6 +150,8 @@ All paths are under `/knowledgeDrop`. Document management endpoints are grouped 
 
 - **Language and framework:** Java 17, Spring Boot
 - **Datastores:** PostgreSQL (service records), Elasticsearch (semantic vector store and keyword search)
+- **Embeddings:** `all-MiniLM-L6-v2` (384 dimensions, open source) from a local sentence-transformers service, so no API key or per-call cost
+- **LLM:** Gemini Flash (free tier is enough for development) behind the `LlmClient` interface; the API key lives in `.env` only
 - **Local infrastructure:** Docker Compose
 - **Data format:** JSON
 
@@ -206,7 +208,7 @@ curl -s -X POST localhost:8080/knowledgeDrop/document/create -H "Authorization: 
 
 ### Implementation status
 
-Endpoint logic that is not built yet is marked with a `TODO:` comment that names the endpoint (for example `TODO: create: ...`) and returns `501 Not Implemented`. The AI-dependent items are **DEFERRED** until an LLM and embedding provider are chosen. Find every open item with `grep -rn "TODO:" src/main`. Matching disabled tests live in `EndpointTodoTests`; move each into a real test class as you build the endpoint.
+Endpoint logic that is not built yet is marked with a `TODO:` comment that names the endpoint (for example `TODO: create: ...`) and returns `501 Not Implemented`. The AI-dependent items are marked **DEFERRED**: the providers are chosen (see Tech Stack), but the embedding service and the Gemini client are not built yet. Find every open item with `grep -rn "TODO:" src/main`. Matching disabled tests live in `EndpointTodoTests`; move each into a real test class as you build the endpoint.
 
 | Endpoint | Status | Implement in |
 |---|---|---|
