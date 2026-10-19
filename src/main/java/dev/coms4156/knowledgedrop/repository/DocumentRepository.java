@@ -62,4 +62,5 @@ public interface DocumentRepository extends JpaRepository<DocumentRecord, UUID> 
   /** Lists one client's non-deleted documents with the given status, one page at a time. */
   Page<DocumentRecord> findByOwnerIdAndStatusAndDeletedAtIsNull(
       UUID ownerId, DocumentStatus status, Pageable pageable);
+
 }
