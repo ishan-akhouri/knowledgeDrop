@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -33,7 +32,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.HexFormat;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -139,16 +137,13 @@ class DocumentServiceTest {
   }
 
   @Test
-  void create_emptyFile_hashesEmptyContent() {
-    saveAssignsIds();
+  void create_emptyFile_throwsBadRequestWithoutSaving() {
     MockMultipartFile file = textFile("empty.txt", "");
 
-    documentService.create(client, file);
+    ApiException ex = assertThrows(ApiException.class, () -> documentService.create(client, file));
 
-    ArgumentCaptor<DocumentRecord> captor = ArgumentCaptor.forClass(DocumentRecord.class);
-    verify(documentRepository).save(captor.capture());
-    assertEquals(0L, captor.getValue().getFileBytes());
-    assertEquals(EMPTY_SHA1, captor.getValue().getContentHash());
+    assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
+    verifyNoInteractions(documentRepository, ingestionService, fileStorage);
   }
 
   @Test
@@ -215,24 +210,6 @@ class DocumentServiceTest {
   }
 
   @Test
-  void create_emptyFile_stillSavesFile() throws Exception {
-    saveAssignsIds();
-    AtomicReference<byte[]> savedBytes = new AtomicReference<>();
-    when(fileStorage.save(eq(clientId), eq("empty.txt"), any(InputStream.class)))
-        .thenAnswer(
-            invocation -> {
-              InputStream in = invocation.getArgument(2);
-              savedBytes.set(in.readAllBytes());
-              return Path.of("unused");
-            });
-
-    documentService.create(client, textFile("empty.txt", ""));
-
-    verify(fileStorage).save(eq(clientId), eq("empty.txt"), any(InputStream.class));
-    assertEquals(0, savedBytes.get().length);
-  }
-
-  @Test
   void create_existingDocumentWithSameName_savesNewFileOnce() throws Exception {
     saveAssignsIds();
     DocumentRecord existing =
@@ -240,6 +217,8 @@ class DocumentServiceTest {
     ReflectionTestUtils.setField(existing, "id", UUID.randomUUID());
     when(documentRepository.findByOwnerIdAndNameAndDeletedAtIsNull(clientId, "notes.txt"))
         .thenReturn(Optional.of(existing));
+    when(documentRepository.markDeletedByOwnerIdAndName(eq(clientId), eq("notes.txt"), any()))
+        .thenReturn(1);
 
     documentService.create(client, textFile("notes.txt", "hello"));
 
@@ -361,19 +340,18 @@ class DocumentServiceTest {
     ReflectionTestUtils.setField(existing, "id", existingId);
     when(documentRepository.findByOwnerIdAndNameAndDeletedAtIsNull(clientId, "notes.txt"))
         .thenReturn(Optional.of(existing));
+    when(documentRepository.markDeletedByOwnerIdAndName(eq(clientId), eq("notes.txt"), any()))
+        .thenReturn(1);
 
     DocumentStatusResponse response =
         documentService.create(client, textFile("notes.txt", "hello"));
     assertEquals(DocumentStatus.PROCESSING, response.status());
 
+    verify(documentRepository)
+        .markDeletedByOwnerIdAndName(eq(clientId), eq("notes.txt"), any());
     ArgumentCaptor<DocumentRecord> captor = ArgumentCaptor.forClass(DocumentRecord.class);
-    verify(documentRepository, times(2)).save(captor.capture());
-    List<DocumentRecord> saved = captor.getAllValues();
-
-    assertSame(existing, saved.get(0));
-    assertNotNull(existing.getDeletedAt());
-
-    DocumentRecord replacement = saved.get(1);
+    verify(documentRepository).save(captor.capture());
+    DocumentRecord replacement = captor.getValue();
     assertNotEquals(existingId, replacement.getId());
     assertNull(replacement.getDeletedAt());
     assertEquals(HELLO_SHA1, replacement.getContentHash());

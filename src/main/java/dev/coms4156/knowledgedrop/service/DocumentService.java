@@ -81,8 +81,8 @@ public class DocumentService {
           "Failed to extract information from request: " + e.getMessage());
     }
 
-    if (fileSize > 10 * 1024 * 1024 * 1024) { 
-      throw ApiException.CONTENT_TOO_LARGE("File size exceeds 10GB limit");
+    if (fileSize > 10L * 1024 * 1024 * 1024) { 
+      throw ApiException.contentTooLarge("File size exceeds 10GB limit");
     }
     if (fileSize == 0) {
       throw ApiException.badRequest("File is empty");
@@ -206,7 +206,8 @@ public class DocumentService {
   private void deleteDocument(UUID clientId, String name) {
     int updated = documentRepository.markDeletedByOwnerIdAndName(clientId, name, Instant.now());
     if (updated == 0) {
-      throw ApiException.notFound("No non-deleted document found with name: " + clientId + "/" + name);
+      throw ApiException.notFound(
+          "No non-deleted document found with name: " + clientId + "/" + name);
     }
   }
 }
