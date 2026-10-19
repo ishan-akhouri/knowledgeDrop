@@ -43,8 +43,9 @@ public class ApiException extends RuntimeException {
   public static ApiException conflict(String reason) {
     return new ApiException(HttpStatus.CONFLICT, reason);
   }
+
   /** Returns a 413 error. */
-  public static ApiException CONTENT_TOO_LARGE(String reason) {
+  public static ApiException contentTooLarge(String reason) {
     return new ApiException(HttpStatus.CONTENT_TOO_LARGE, reason);
   }
 
