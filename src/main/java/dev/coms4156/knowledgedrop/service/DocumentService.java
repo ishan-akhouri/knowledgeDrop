@@ -70,6 +70,7 @@ public class DocumentService {
     long fileSize;
     String sha1Hash;
     DocumentRecord newDocument;
+
     try {
       clientId = client.getId();
       fileName = file.getOriginalFilename();
@@ -79,25 +80,37 @@ public class DocumentService {
       throw ApiException.badRequest(
           "Failed to extract information from request: " + e.getMessage());
     }
+
+    if (fileSize > 10 * 1024 * 1024 * 1024) { 
+      throw ApiException.CONTENT_TOO_LARGE("File size exceeds 10GB limit");
+    }
+    if (fileSize == 0) {
+      throw ApiException.badRequest("File is empty");
+    }
+    if (fileName == null || fileName.isBlank()) {
+      throw ApiException.badRequest("File name is missing");
+    }
+
     try (InputStream in = file.getInputStream()) {
       fileStorage.save(client.getId(), fileName, in);
     } catch (Exception e) {
       throw ApiException.internalServerError(
           "Failed to save file content: " + e.getMessage());
     }
+
     try (InputStream in = file.getInputStream()) {
       sha1Hash = computeSha1Hash(in);
     } catch (Exception e) {
       throw ApiException.internalServerError(
           "Failed to process file content: " + e.getMessage());
     }
+
     try {
       Optional<DocumentRecord> existing =
           documentRepository.findByOwnerIdAndNameAndDeletedAtIsNull(clientId, fileName);
-      existing.ifPresent(document -> {
-        document.setDeletedAt(Instant.now());
-        documentRepository.save(document);
-      });
+      if (existing.isPresent()) {
+        deleteDocument(client.getId(), fileName);
+      }
     } catch (Exception e) {
       throw ApiException.internalServerError(
           "Failed to check for existing documents: " + e.getMessage());
@@ -187,6 +200,13 @@ public class DocumentService {
       return HexFormat.of().formatHex(digest.digest());
     } catch (NoSuchAlgorithmException e) {
       throw new IllegalStateException("SHA-1 is not available", e);
+    }
+  }
+
+  private void deleteDocument(UUID clientId, String name) {
+    int updated = documentRepository.markDeletedByOwnerIdAndName(clientId, name, Instant.now());
+    if (updated == 0) {
+      throw ApiException.notFound("No non-deleted document found with name: " + clientId + "/" + name);
     }
   }
 }

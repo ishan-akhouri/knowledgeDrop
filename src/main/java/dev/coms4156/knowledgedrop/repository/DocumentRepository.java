@@ -2,11 +2,15 @@ package dev.coms4156.knowledgedrop.repository;
 
 import dev.coms4156.knowledgedrop.model.DocumentRecord;
 import dev.coms4156.knowledgedrop.model.DocumentStatus;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /**
  * Persistence for {@link DocumentRecord}. Every lookup is scoped to the owning client so one client
@@ -32,4 +36,23 @@ public interface DocumentRepository extends JpaRepository<DocumentRecord, UUID> 
   /** Lists one client's documents with the given status, one page at a time. */
   Page<DocumentRecord> findByOwnerIdAndStatus(
       UUID ownerId, DocumentStatus status, Pageable pageable);
+
+  /**
+   * Soft-deletes a client's non-deleted document with the given name by setting its {@code
+   * deletedAt} marker and clearing its {@code activeKey} so the name can be reused. Documents
+   * already marked deleted are left untouched.
+   *
+   * @param ownerId ID of the owning client
+   * @param name document name
+   * @param deletedAt deletion timestamp to record
+   * @return the number of records updated ({@code 0} if no matching non-deleted document exists)
+   */
+  @Modifying(clearAutomatically = true, flushAutomatically = true)
+  @Query(
+      "UPDATE DocumentRecord d SET d.deletedAt = :deletedAt, d.activeKey = NULL "
+          + "WHERE d.ownerId = :ownerId AND d.name = :name AND d.deletedAt IS NULL")
+  int markDeletedByOwnerIdAndName(
+      @Param("ownerId") UUID ownerId,
+      @Param("name") String name,
+      @Param("deletedAt") Instant deletedAt);
 }

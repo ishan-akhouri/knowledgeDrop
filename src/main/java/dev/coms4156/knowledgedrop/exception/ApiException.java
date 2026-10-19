@@ -43,7 +43,11 @@ public class ApiException extends RuntimeException {
   public static ApiException conflict(String reason) {
     return new ApiException(HttpStatus.CONFLICT, reason);
   }
-  
+  /** Returns a 413 error. */
+  public static ApiException CONTENT_TOO_LARGE(String reason) {
+    return new ApiException(HttpStatus.CONTENT_TOO_LARGE, reason);
+  }
+
   /** Returns a 500 error. */
   public static ApiException internalServerError(String reason) {
     return new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, reason);
