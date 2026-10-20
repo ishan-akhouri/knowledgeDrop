@@ -4,8 +4,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 /**
- * Body of {@code POST /knowledgeDrop/registerClient}.
+ * JSON body for registering a client system.
  *
- * @param clientName unique name for the client program
+ * @param name name of the client system
  */
-public record RegisterClientRequest(@NotBlank @Size(max = 100) String clientName) {}
+public record RegisterClientRequest(@NotBlank @Size(max = 255) String name) {}
