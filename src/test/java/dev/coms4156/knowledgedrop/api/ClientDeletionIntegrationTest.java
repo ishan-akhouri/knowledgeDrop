@@ -198,7 +198,8 @@ class ClientDeletionIntegrationTest {
   }
 
   private UUID document(UUID ownerId, Instant deletedAt) {
-    DocumentRecord record = new DocumentRecord(ownerId, UUID.randomUUID().toString(), "text/plain");
+    DocumentRecord record = new DocumentRecord(
+        ownerId, UUID.randomUUID().toString(), "text/plain", 0L, "a".repeat(40));
     record.setDeletedAt(deletedAt);
     return documentRepository.saveAndFlush(record).getId();
   }

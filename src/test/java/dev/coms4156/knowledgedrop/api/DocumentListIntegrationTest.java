@@ -69,9 +69,10 @@ class DocumentListIntegrationTest {
     MvcResult result =
         mockMvc
             .perform(
-                post("/knowledgeDrop/registerClient")
+                post("/knowledgeDrop/client/register")
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content("{\"clientName\":\"client-" + UUID.randomUUID() + "\"}"))
+                    .content("{\"name\":\"client-" + UUID.randomUUID() + "\"}"))
+            .andExpect(status().isCreated())
             .andReturn();
     String body = result.getResponse().getContentAsString();
     return new Registered(
