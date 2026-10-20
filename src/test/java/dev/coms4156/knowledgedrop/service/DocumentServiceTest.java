@@ -76,7 +76,8 @@ class DocumentServiceTest {
   @BeforeEach
   void setUp() {
     // create() registers an afterCommit hook; give it a synchronization context to register on.
-    // No commit happens in these unit tests, so ingestion is never triggered here (ignored for now).
+    // No commit happens in these unit tests, so ingestion is never triggered here (ignored for
+    // now).
     TransactionSynchronizationManager.initSynchronization();
     clientId = UUID.randomUUID();
     client = new ClientRecord("acme", "token-hash");
