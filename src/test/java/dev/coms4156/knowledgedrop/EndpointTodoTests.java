@@ -78,15 +78,6 @@ class EndpointTodoTests {
   @Disabled("TODO(list)")
   void list_clientWithNoDocuments_returnsEmptyList() {}
 
-  // ---- DELETE /knowledgeDrop/clientDrop
-  @Test
-  @Disabled("TODO(clientDrop)")
-  void clientDrop_removesAllClientDataAndInvalidatesToken() {}
-
-  @Test
-  @Disabled("TODO(clientDrop)")
-  void clientDrop_tokenAndClientIdMismatch_returnsError() {}
-
   // ---- POST /knowledgeDrop/ask
   @Test
   @Disabled("TODO(ask)")

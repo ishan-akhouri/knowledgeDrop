@@ -5,11 +5,15 @@ import dev.coms4156.knowledgedrop.api.dto.RegisterClientResponse;
 import dev.coms4156.knowledgedrop.exception.ApiException;
 import dev.coms4156.knowledgedrop.model.ClientRecord;
 import dev.coms4156.knowledgedrop.repository.ClientRepository;
+import dev.coms4156.knowledgedrop.repository.DocumentRepository;
 import dev.coms4156.knowledgedrop.security.TokenUtils;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Client registration and token authentication.
@@ -21,37 +25,39 @@ import org.springframework.stereotype.Service;
 public class ClientService {
 
   private final ClientRepository clientRepository;
+  private final DocumentRepository documentRepository;
 
   /**
    * Creates the service.
    *
    * @param clientRepository persistence for client records
+   * @param documentRepository persistence for owned documents
    */
-  public ClientService(ClientRepository clientRepository) {
+  public ClientService(ClientRepository clientRepository, DocumentRepository documentRepository) {
     this.clientRepository = clientRepository;
+    this.documentRepository = documentRepository;
   }
 
   /**
    * Registers a new client and returns its token. Only a hash of the token is stored.
    *
-   * @param clientName the requested client name
+   * @param name name of the client system
    * @return the new client ID and the plain token (shown only once)
-   * @throws ApiException with status 409 if the name is already registered
+   * @throws ApiException with status 400 if the name is blank or longer than 255 characters
    */
-  public RegisterClientResponse register(String clientName) {
-    String name = clientName.trim();
-    if (clientRepository.existsByName(name)) {
-      throw ApiException.conflict("Client name '" + name + "' is already registered");
-    }
+  public RegisterClientResponse register(String name) {
+    String validatedName = validateName(name);
     String token = TokenUtils.generateToken();
-    ClientRecord saved;
-    try {
-      saved = clientRepository.saveAndFlush(new ClientRecord(name, TokenUtils.hash(token)));
-    } catch (DataIntegrityViolationException e) {
-      // Lost a race with a concurrent registration of the same name.
-      throw ApiException.conflict("Client name '" + name + "' is already registered");
-    }
+    ClientRecord saved = clientRepository.saveAndFlush(
+        new ClientRecord(validatedName, TokenUtils.hash(token)));
     return new RegisterClientResponse(saved.getId(), token);
+  }
+
+  private static String validateName(String value) {
+    if (value == null || value.isBlank() || value.length() > 255) {
+      throw ApiException.badRequest("name must be nonblank and at most 255 characters");
+    }
+    return value.strip();
   }
 
   /**
@@ -64,22 +70,31 @@ public class ClientService {
     if (token == null || token.isBlank()) {
       return Optional.empty();
     }
-    return clientRepository.findByTokenHash(TokenUtils.hash(token));
+    return clientRepository.findByTokenHash(TokenUtils.hash(token))
+        .filter(client -> client.getDeletedAt() == null);
   }
 
   /**
-   * Deletes a client and all of its data.
+   * Soft-deletes the caller and all owned documents at one timestamp in a single transaction.
    *
    * @param client the authenticated caller
-   * @param clientId the client ID the caller wants to drop
+   * @param clientId the client ID to delete, which must match the caller
    * @return confirmation message
    */
-  public MessageResponse drop(ClientRecord client, UUID clientId) {
-    // TODO: clientDrop: verify clientId equals client.getId(); otherwise throw a 4xx
-    //   "token and client ID do not match".
-    // TODO: clientDrop: delete every document the client owns, including the stored file and the
-    //   Elasticsearch chunk entries and embeddings (reuse the DocumentService delete logic).
-    // TODO: clientDrop: delete the client record, which also invalidates the token.
-    throw ApiException.notImplemented("DELETE /knowledgeDrop/clientDrop");
+  @Transactional
+  public MessageResponse delete(ClientRecord client, UUID clientId) {
+    if (!client.getId().equals(clientId)) {
+      throw new ApiException(HttpStatus.FORBIDDEN, "Clients can only delete themselves");
+    }
+    ClientRecord stored = clientRepository.findByIdForUpdate(clientId)
+        .orElseThrow(() -> ApiException.notFound("Client not found"));
+    if (stored.getDeletedAt() != null) {
+      throw ApiException.unauthorized("Client has been deleted");
+    }
+    Instant deletedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+    stored.setDeletedAt(deletedAt);
+    clientRepository.saveAndFlush(stored);
+    documentRepository.softDeleteByOwnerId(clientId, deletedAt);
+    return new MessageResponse("Client and owned documents deleted");
   }
 }

@@ -55,4 +55,8 @@ public interface DocumentRepository extends JpaRepository<DocumentRecord, UUID> 
       @Param("ownerId") UUID ownerId,
       @Param("name") String name,
       @Param("deletedAt") Instant deletedAt);
+  /** Marks all owned documents deleted, including documents that were deleted earlier. */
+  @Modifying(flushAutomatically = true, clearAutomatically = true)
+  @Query("update DocumentRecord d set d.deletedAt = :deletedAt where d.ownerId = :ownerId")
+  int softDeleteByOwnerId(@Param("ownerId") UUID ownerId, @Param("deletedAt") Instant deletedAt);
 }
