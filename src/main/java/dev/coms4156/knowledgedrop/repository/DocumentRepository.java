@@ -37,6 +37,25 @@ public interface DocumentRepository extends JpaRepository<DocumentRecord, UUID> 
   Page<DocumentRecord> findByOwnerIdAndStatus(
       UUID ownerId, DocumentStatus status, Pageable pageable);
 
+  /**
+   * Soft-deletes a client's non-deleted document with the given name by setting its {@code
+   * deletedAt} marker and clearing its {@code activeKey} so the name can be reused. Documents
+   * already marked deleted are left untouched.
+   *
+   * @param ownerId ID of the owning client
+   * @param name document name
+   * @param deletedAt deletion timestamp to record
+   * @return the number of records updated ({@code 0} if no matching non-deleted document exists)
+   */
+  @Modifying(clearAutomatically = true, flushAutomatically = true)
+  @Query(
+      "UPDATE DocumentRecord d SET d.deletedAt = :deletedAt, d.activeKey = NULL "
+          + "WHERE d.ownerId = :ownerId AND d.name = :name AND d.deletedAt IS NULL")
+  int markDeletedByOwnerIdAndName(
+      @Param("ownerId") UUID ownerId,
+      @Param("name") String name,
+      @Param("deletedAt") Instant deletedAt);
+
   /** Marks all owned documents deleted, including documents that were deleted earlier. */
   @Modifying(flushAutomatically = true, clearAutomatically = true)
   @Query("update DocumentRecord d set d.deletedAt = :deletedAt where d.ownerId = :ownerId")

@@ -44,6 +44,16 @@ public class ApiException extends RuntimeException {
     return new ApiException(HttpStatus.CONFLICT, reason);
   }
 
+  /** Returns a 413 error. */
+  public static ApiException contentTooLarge(String reason) {
+    return new ApiException(HttpStatus.CONTENT_TOO_LARGE, reason);
+  }
+
+  /** Returns a 500 error. */
+  public static ApiException internalServerError(String reason) {
+    return new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, reason);
+  }
+
   /**
    * Returns a 501 error. Every endpoint that is still a TODO fails with this until it is built.
    *
