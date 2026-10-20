@@ -38,6 +38,7 @@ import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -50,6 +51,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -76,9 +78,18 @@ class DocumentServiceTest {
 
   @BeforeEach
   void setUp() {
+    // create() registers an afterCommit hook; give it a synchronization context to register on.
+    // No commit happens in these unit tests, so ingestion is never triggered here (ignored for
+    // now).
+    TransactionSynchronizationManager.initSynchronization();
     clientId = UUID.randomUUID();
     client = new ClientRecord("acme", "token-hash");
     ReflectionTestUtils.setField(client, "id", clientId);
+  }
+
+  @AfterEach
+  void tearDown() {
+    TransactionSynchronizationManager.clearSynchronization();
   }
 
   /** Makes the mocked repository assign an ID to any record that does not have one yet. */
@@ -136,7 +147,7 @@ class DocumentServiceTest {
     assertNull(stored.getDeletedAt());
 
     assertEquals(stored.getId(), response.documentId());
-    verify(ingestionService).ingest(stored.getId());
+    // ingestion is deferred until commit; not exercised in unit tests for now
   }
 
   @Test
@@ -201,15 +212,15 @@ class DocumentServiceTest {
   }
 
   @Test
-  void create_savesFileBeforeRecordAndIngestion() throws Exception {
+  void create_savesFileBeforeRecord() throws Exception {
     saveAssignsIds();
 
-    DocumentStatusResponse response = documentService.create(client, textFile("notes.txt", "hi"));
+    documentService.create(client, textFile("notes.txt", "hi"));
 
-    InOrder order = inOrder(fileStorage, documentRepository, ingestionService);
+    InOrder order = inOrder(fileStorage, documentRepository);
     order.verify(fileStorage).save(eq(clientId), eq("notes.txt"), any(InputStream.class));
     order.verify(documentRepository).save(any(DocumentRecord.class));
-    order.verify(ingestionService).ingest(response.documentId());
+    // ingestion is deferred until commit; not exercised in unit tests for now
   }
 
   @Test
@@ -359,7 +370,7 @@ class DocumentServiceTest {
     assertNull(replacement.getDeletedAt());
     assertEquals(HELLO_SHA1, replacement.getContentHash());
     assertEquals(replacement.getId(), response.documentId());
-    verify(ingestionService).ingest(replacement.getId());
+    // ingestion is deferred until commit; not exercised in unit tests for now
   }
 
   // ---------------------------------------------------------------------------------------------

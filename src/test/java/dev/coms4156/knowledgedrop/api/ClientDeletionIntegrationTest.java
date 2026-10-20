@@ -53,7 +53,8 @@ class ClientDeletionIntegrationTest {
   @Autowired private ClientRepository clientRepository;
   @MockitoSpyBean private DocumentRepository documentRepository;
 
-  private static final String HELLO_SHA1 = "aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d";
+  /** SHA-1 of empty content; the tests here don't depend on document content. */
+  private static final String EMPTY_CONTENT_SHA1 = "da39a3ee5e6b4b0d3255bfef95601890afd80709";
 
   private MockMvc mockMvc;
 
@@ -201,7 +202,7 @@ class ClientDeletionIntegrationTest {
 
   private UUID document(UUID ownerId, Instant deletedAt) {
     DocumentRecord record = new DocumentRecord(
-        ownerId, UUID.randomUUID().toString(), "text/plain", 5L, HELLO_SHA1);
+        ownerId, UUID.randomUUID().toString(), "text/plain", 0L, EMPTY_CONTENT_SHA1);
     record.setDeletedAt(deletedAt);
     return documentRepository.saveAndFlush(record).getId();
   }

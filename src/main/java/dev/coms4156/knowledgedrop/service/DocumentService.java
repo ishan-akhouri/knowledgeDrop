@@ -7,6 +7,7 @@ import dev.coms4156.knowledgedrop.api.dto.MessageResponse;
 import dev.coms4156.knowledgedrop.exception.ApiException;
 import dev.coms4156.knowledgedrop.model.ClientRecord;
 import dev.coms4156.knowledgedrop.model.DocumentRecord;
+import dev.coms4156.knowledgedrop.model.DocumentStatus;
 import dev.coms4156.knowledgedrop.repository.DocumentRepository;
 import dev.coms4156.knowledgedrop.storage.FileStorage;
 import java.io.IOException;
@@ -19,6 +20,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -63,6 +67,7 @@ public class DocumentService {
    * @param file the uploaded binary file part
    * @return the document ID and its current status
    */
+  @Transactional
   public DocumentStatusResponse create(ClientRecord client, MultipartFile file) {
     UUID clientId;
     String fileName;
@@ -125,8 +130,20 @@ public class DocumentService {
     }
 
 
-    ingestionService.ingest(newDocument.getId());
-    return new DocumentStatusResponse(newDocument.getId(), newDocument.getStatus());
+    UUID documentId = newDocument.getId();
+    DocumentStatus status = newDocument.getStatus();
+
+    // Start ingestion only after the transaction commits, so the ingestion thread can see the
+    // new record and never runs for a document whose transaction was rolled back.
+    TransactionSynchronizationManager.registerSynchronization(
+        new TransactionSynchronization() {
+          @Override
+          public void afterCommit() {
+            ingestionService.ingest(documentId);
+          }
+        });
+
+    return new DocumentStatusResponse(documentId, status);
   }
 
   /**
