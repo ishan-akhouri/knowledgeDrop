@@ -63,4 +63,8 @@ public interface DocumentRepository extends JpaRepository<DocumentRecord, UUID> 
   Page<DocumentRecord> findByOwnerIdAndStatusAndDeletedAtIsNull(
       UUID ownerId, DocumentStatus status, Pageable pageable);
 
+  /** Marks all owned documents deleted, including documents that were deleted earlier. */
+  @Modifying(flushAutomatically = true, clearAutomatically = true)
+  @Query("update DocumentRecord d set d.deletedAt = :deletedAt where d.ownerId = :ownerId")
+  int softDeleteByOwnerId(@Param("ownerId") UUID ownerId, @Param("deletedAt") Instant deletedAt);
 }

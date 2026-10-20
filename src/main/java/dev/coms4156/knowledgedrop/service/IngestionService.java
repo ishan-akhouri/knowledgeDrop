@@ -21,6 +21,8 @@ public class IngestionService {
    */
   @Async("ingestionExecutor")
   public void ingest(UUID documentId) {
+    // TODO: ingestion: skip deleted documents and deleted owners; coordinate final writes with
+    //   client deletion so an in-flight job cannot make deleted content searchable again.
     // TODO: ingestion: extract text: direct read for text files, PDF text extraction for pdf (for
     //   example Apache PDFBox), OCR for images (for example Tess4J). Keep page numbers.
     // TODO: ingestion: split the text into chunks using knowledgedrop.ingestion.* settings.
@@ -37,7 +39,7 @@ public class IngestionService {
    * @param documentId the document whose chunks should be deleted
    */
   public void deleteChunks(UUID documentId) {
-    // TODO: create (replacing a document), delete, clientDrop: delete all chunk embeddings
+    // TODO: create (replacing a document), delete: delete all chunk embeddings
     //   (vector store) and chunk entries (keyword index) in Elasticsearch belonging to
     //   documentId.
     throw ApiException.notImplemented("chunk deletion");

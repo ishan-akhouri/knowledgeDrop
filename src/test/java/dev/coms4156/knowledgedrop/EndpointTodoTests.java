@@ -77,6 +77,14 @@ class EndpointTodoTests {
   @Test
   @Disabled("TODO(clientDrop)")
   void clientDrop_tokenAndClientIdMismatch_returnsError() {}
+  // ---- GET /knowledgeDrop/document/list
+  @Test
+  @Disabled("TODO(list)")
+  void list_appliesStatusFilterAndPagination() {}
+
+  @Test
+  @Disabled("TODO(list)")
+  void list_clientWithNoDocuments_returnsEmptyList() {}
 
   // ---- POST /knowledgeDrop/ask
   @Test
