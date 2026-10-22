@@ -18,8 +18,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import dev.coms4156.knowledgedrop.api.dto.DocumentContent;
 import dev.coms4156.knowledgedrop.api.dto.DocumentStatusResponse;
+import dev.coms4156.knowledgedrop.api.dto.ReadDocument;
 import dev.coms4156.knowledgedrop.config.KnowledgeDropProperties;
 import dev.coms4156.knowledgedrop.exception.ApiException;
 import dev.coms4156.knowledgedrop.model.ClientRecord;
@@ -51,6 +51,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -70,6 +71,8 @@ class DocumentServiceTest {
   @Mock private IngestionService ingestionService;
 
   @Mock private FileStorage fileStorage;
+
+  @Mock private PlatformTransactionManager transactionManager;
 
   @InjectMocks private DocumentService documentService;
 
@@ -119,7 +122,8 @@ class DocumentServiceTest {
             new KnowledgeDropProperties.Retrieval(5, 60, 50),
             new KnowledgeDropProperties.Embedding("http://localhost:5000", "model", 384),
             new KnowledgeDropProperties.Llm("", "", ""));
-    return new DocumentService(documentRepository, ingestionService, new FileStorage(properties));
+    return new DocumentService(
+        documentRepository, ingestionService, new FileStorage(properties), transactionManager);
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -231,8 +235,6 @@ class DocumentServiceTest {
     ReflectionTestUtils.setField(existing, "id", UUID.randomUUID());
     when(documentRepository.findByOwnerIdAndNameAndDeletedAtIsNull(clientId, "notes.txt"))
         .thenReturn(Optional.of(existing));
-    when(documentRepository.markDeletedByOwnerIdAndName(eq(clientId), eq("notes.txt"), any()))
-        .thenReturn(1);
 
     documentService.create(client, textFile("notes.txt", "hello"));
 
@@ -354,23 +356,68 @@ class DocumentServiceTest {
     ReflectionTestUtils.setField(existing, "id", existingId);
     when(documentRepository.findByOwnerIdAndNameAndDeletedAtIsNull(clientId, "notes.txt"))
         .thenReturn(Optional.of(existing));
-    when(documentRepository.markDeletedByOwnerIdAndName(eq(clientId), eq("notes.txt"), any()))
-        .thenReturn(1);
 
     DocumentStatusResponse response =
         documentService.create(client, textFile("notes.txt", "hello"));
     assertEquals(DocumentStatus.PROCESSING, response.status());
 
-    verify(documentRepository)
-        .markDeletedByOwnerIdAndName(eq(clientId), eq("notes.txt"), any());
+    // The old record is soft-deleted and saved first, then the replacement is saved.
     ArgumentCaptor<DocumentRecord> captor = ArgumentCaptor.forClass(DocumentRecord.class);
-    verify(documentRepository).save(captor.capture());
-    DocumentRecord replacement = captor.getValue();
+    verify(documentRepository, times(2)).save(captor.capture());
+    DocumentRecord softDeleted = captor.getAllValues().get(0);
+    DocumentRecord replacement = captor.getAllValues().get(1);
+    assertSame(existing, softDeleted);
+    assertNotNull(softDeleted.getDeletedAt());
     assertNotEquals(existingId, replacement.getId());
     assertNull(replacement.getDeletedAt());
     assertEquals(HELLO_SHA1, replacement.getContentHash());
     assertEquals(replacement.getId(), response.documentId());
     // ingestion is deferred until commit; not exercised in unit tests for now
+  }
+
+  @Test
+  void create_existingDocumentWithSameName_savesBothRecordsInOneCommittedTransaction() {
+    saveAssignsIds();
+    DocumentRecord existing =
+        new DocumentRecord(clientId, "notes.txt", "text/plain", 3L, EMPTY_SHA1);
+    ReflectionTestUtils.setField(existing, "id", UUID.randomUUID());
+    when(documentRepository.findByOwnerIdAndNameAndDeletedAtIsNull(clientId, "notes.txt"))
+        .thenReturn(Optional.of(existing));
+
+    documentService.create(client, textFile("notes.txt", "hello"));
+
+    InOrder order = inOrder(transactionManager, documentRepository);
+    order.verify(transactionManager).getTransaction(any());
+    order.verify(documentRepository, times(2)).save(any(DocumentRecord.class));
+    order.verify(transactionManager).commit(any());
+    verify(transactionManager, never()).rollback(any());
+  }
+
+  @Test
+  void create_existingDocumentWithSameName_newRecordSaveFails_rollsBackAndSkipsIngestion() {
+    DocumentRecord existing =
+        new DocumentRecord(clientId, "notes.txt", "text/plain", 3L, EMPTY_SHA1);
+    ReflectionTestUtils.setField(existing, "id", UUID.randomUUID());
+    when(documentRepository.findByOwnerIdAndNameAndDeletedAtIsNull(clientId, "notes.txt"))
+        .thenReturn(Optional.of(existing));
+    // Soft-deleting the old record succeeds, but saving the replacement fails.
+    when(documentRepository.save(any(DocumentRecord.class)))
+        .thenAnswer(
+            invocation -> {
+              DocumentRecord record = invocation.getArgument(0);
+              if (record == existing) {
+                return record;
+              }
+              throw new IllegalStateException("db down");
+            });
+    MockMultipartFile file = textFile("notes.txt", "hello");
+
+    ApiException ex = assertThrows(ApiException.class, () -> documentService.create(client, file));
+
+    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatus());
+    verify(transactionManager).rollback(any());
+    verify(transactionManager, never()).commit(any());
+    verifyNoInteractions(ingestionService);
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -470,15 +517,17 @@ class DocumentServiceTest {
   }
 
   @Test
-  void read_existingDocument_returnsItsRecord() throws Exception {
+  void read_existingDocument_returnsItsMetadata() throws Exception {
     DocumentRecord record = storedRecord("notes.txt", 5L, HELLO_SHA1);
     stubExisting(record);
     stubStoredContent("notes.txt", "hello");
 
-    DocumentContent content = documentService.read(client, "notes.txt");
+    ReadDocument content = documentService.read(client, "notes.txt");
 
-    assertSame(record, content.document());
-    assertNotNull(content.stream());
+    assertEquals("notes.txt", content.fileName());
+    assertEquals("text/plain", content.fileType());
+    assertEquals(5L, content.fileSize());
+    assertNotNull(content.inputStream());
   }
 
   @Test
@@ -486,9 +535,9 @@ class DocumentServiceTest {
     stubExisting(storedRecord("notes.txt", 5L, HELLO_SHA1));
     stubStoredContent("notes.txt", "hello");
 
-    DocumentContent content = documentService.read(client, "notes.txt");
+    ReadDocument content = documentService.read(client, "notes.txt");
 
-    try (InputStream in = content.stream()) {
+    try (InputStream in = content.inputStream()) {
       assertEquals("hello", new String(in.readAllBytes(), StandardCharsets.UTF_8));
     }
   }
@@ -498,9 +547,9 @@ class DocumentServiceTest {
     stubExisting(storedRecord("empty.txt", 0L, EMPTY_SHA1));
     stubStoredContent("empty.txt", "");
 
-    DocumentContent content = documentService.read(client, "empty.txt");
+    ReadDocument content = documentService.read(client, "empty.txt");
 
-    try (InputStream in = content.stream()) {
+    try (InputStream in = content.inputStream()) {
       assertEquals(0, in.readAllBytes().length);
     }
   }
@@ -554,15 +603,17 @@ class DocumentServiceTest {
   }
 
   @Test
-  void read_lookupFails_throwsNotFoundWithoutOpeningFile() {
+  void read_lookupFails_propagatesFailureWithoutOpeningFile() {
     when(documentRepository.findByOwnerIdAndNameAndDeletedAtIsNull(clientId, "notes.txt"))
         .thenThrow(new IllegalStateException("db down"));
 
-    ApiException ex =
-        assertThrows(ApiException.class, () -> documentService.read(client, "notes.txt"));
+    // read() does not wrap repository failures, so an unexpected lookup error propagates as-is
+    // rather than being reported as "document not found".
+    IllegalStateException ex =
+        assertThrows(
+            IllegalStateException.class, () -> documentService.read(client, "notes.txt"));
 
-    // The service treats any lookup failure as "document not found".
-    assertEquals(HttpStatus.NOT_FOUND, ex.getStatus());
+    assertEquals("db down", ex.getMessage());
     verifyNoInteractions(fileStorage);
   }
 
@@ -638,10 +689,10 @@ class DocumentServiceTest {
   void read_realStorage_returnsContentWrittenByCreate(@TempDir Path dataDir) throws Exception {
     DocumentService service = createThenExpose(dataDir, "notes.txt", "hello");
 
-    DocumentContent content = service.read(client, "notes.txt");
+    ReadDocument content = service.read(client, "notes.txt");
 
-    assertEquals("notes.txt", content.document().getName());
-    try (InputStream in = content.stream()) {
+    assertEquals("notes.txt", content.fileName());
+    try (InputStream in = content.inputStream()) {
       assertEquals("hello", new String(in.readAllBytes(), StandardCharsets.UTF_8));
     }
   }

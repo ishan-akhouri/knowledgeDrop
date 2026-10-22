@@ -1,14 +1,14 @@
 package dev.coms4156.knowledgedrop.api;
 
-import dev.coms4156.knowledgedrop.api.dto.DocumentContent;
 import dev.coms4156.knowledgedrop.api.dto.DocumentStatusResponse;
 import dev.coms4156.knowledgedrop.api.dto.DocumentSummary;
 import dev.coms4156.knowledgedrop.api.dto.MessageResponse;
+import dev.coms4156.knowledgedrop.api.dto.ReadDocument;
 import dev.coms4156.knowledgedrop.exception.ApiException;
 import dev.coms4156.knowledgedrop.model.ClientRecord;
-import dev.coms4156.knowledgedrop.model.DocumentRecord;
 import dev.coms4156.knowledgedrop.security.AuthInterceptor;
 import dev.coms4156.knowledgedrop.service.DocumentService;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -16,6 +16,7 @@ import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.InvalidMediaTypeException;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -73,20 +74,40 @@ public class DocumentController {
   public ResponseEntity<InputStreamResource> read(
       @RequestAttribute(AuthInterceptor.CLIENT_ATTRIBUTE) ClientRecord client,
       @RequestParam(value = "documentName", required = false) String documentName) {
-    DocumentContent documentContent = documentService.read(client, requireName(documentName));
-    
-    DocumentRecord document = documentContent.document();
-    InputStream stream = documentContent.stream();
+    ReadDocument readDocument = documentService.read(client, requireName(documentName));
 
-    ContentDisposition disposition = ContentDisposition.attachment()
-        .filename(document.getName(), StandardCharsets.UTF_8)
-        .build();
+    InputStream stream = readDocument.inputStream();
 
-    return ResponseEntity.ok()
-        .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
-        .contentType(MediaType.parseMediaType(document.getType()))
-        .contentLength(document.getFileBytes())
-        .body(new InputStreamResource(stream));
+    try {
+      ContentDisposition disposition = ContentDisposition.attachment()
+          .filename(readDocument.fileName(), StandardCharsets.UTF_8)
+          .build();
+
+      return ResponseEntity.ok()
+          .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+          .contentType(parseMediaTypeOrDefault(readDocument.fileType()))
+          .contentLength(readDocument.fileSize())
+          .body(new InputStreamResource(stream));
+    } catch (RuntimeException e) {
+      // Spring closes the stream after writing the body; close it ourselves if we never get there.
+      try {
+        stream.close();
+      } catch (IOException closeEx) {
+        e.addSuppressed(closeEx);
+      }
+      throw e;
+    }
+  }
+
+  private static MediaType parseMediaTypeOrDefault(String type) {
+    if (type == null || type.isBlank()) {
+      return MediaType.APPLICATION_OCTET_STREAM;
+    }
+    try {
+      return MediaType.parseMediaType(type);
+    } catch (InvalidMediaTypeException e) {
+      return MediaType.APPLICATION_OCTET_STREAM;
+    }
   }
 
   /** Soft-deletes the client's document with the given name. TODO(delete). */
