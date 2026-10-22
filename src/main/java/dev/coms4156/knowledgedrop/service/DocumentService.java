@@ -132,10 +132,7 @@ public class DocumentService {
           "Failed to create document record: " + e.getMessage());
     }
     if (oldDocument != null) {
-      Boolean isUpdated = updateDocument(oldDocument, newDocument);
-      if (!isUpdated) {
-        throw ApiException.internalServerError("Failed to update document records");
-      }
+      replaceDocument(oldDocument, newDocument);
     } else {
       try {
         documentRepository.save(newDocument);
@@ -165,8 +162,6 @@ public class DocumentService {
    */
   public ReadDocument read(ClientRecord client, String fileName) {
     UUID clientId;
-    InputStream fileStream;
-    String sha1Hash;
     DocumentRecord document;
     try {
       clientId = client.getId();
@@ -174,33 +169,27 @@ public class DocumentService {
       throw ApiException.badRequest(
           "Failed to extract information from request: " + e.getMessage());
     }
-    try {
-      Optional<DocumentRecord> documentOpt =
-          documentRepository.findByOwnerIdAndNameAndDeletedAtIsNull(clientId, fileName);
-      if (documentOpt.isEmpty()) {
-        throw ApiException.notFound("Document not found or has been deleted");
-      }
-      document = documentOpt.get();
-    } catch (Exception e) {
-      throw ApiException.notFound("Document not found or has been deleted");
-    }
-    try {
-      fileStream = fileStorage.open(clientId, fileName);
-      sha1Hash = document.getContentHash();
-    } catch (Exception e) {
-      throw ApiException.internalServerError("Failed to read file content: " + e.getMessage());
-    }
 
-    try {
-      String computedHash = computeSha1Hash(fileStream);
-      if (!computedHash.equals(sha1Hash)) {
+    document = documentRepository
+        .findByOwnerIdAndNameAndDeletedAtIsNull(clientId, fileName)
+        .orElseThrow(() -> ApiException.notFound("Document not found or has been deleted"));
+
+    // Stream #1: used only to verify the content hash; closed automatically.
+    try (InputStream hashStream = fileStorage.open(clientId, fileName)) {
+      String computedHash = computeSha1Hash(hashStream);
+      if (!computedHash.equals(document.getContentHash())) {
         throw ApiException.internalServerError("File content hash mismatch");
       }
+    } catch (ApiException e) {
+      throw e;
     } catch (IOException e) {
       throw ApiException.internalServerError("Failed to compute file hash: " + e.getMessage());
     } catch (Exception e) {
       throw ApiException.internalServerError("Unexpected error: " + e.getMessage());
     }
+
+    // Stream #2: returned to the caller, who is responsible for closing it.
+    InputStream fileStream;
     try {
       fileStream = fileStorage.open(clientId, fileName);
     } catch (Exception e) {
@@ -275,16 +264,15 @@ public class DocumentService {
    *
    * @param oldDocument the existing document to soft-delete
    * @param newDocument the new document that replaces it
-   * @return true if both changes were committed
+   * @throws ApiException if either save fails (both changes are rolled back)
    */
-  private boolean updateDocument(DocumentRecord oldDocument, DocumentRecord newDocument) {
+  private void replaceDocument(DocumentRecord oldDocument, DocumentRecord newDocument) {
     try {
       transactionTemplate.executeWithoutResult(status -> {
         oldDocument.setDeletedAt(Instant.now());
         documentRepository.save(oldDocument);
         documentRepository.save(newDocument);
       });
-      return true;
     } catch (Exception e) {
       throw ApiException.internalServerError(
           "Failed to update document records: " + e.getMessage());

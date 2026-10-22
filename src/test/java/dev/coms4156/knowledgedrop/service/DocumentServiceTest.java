@@ -603,15 +603,17 @@ class DocumentServiceTest {
   }
 
   @Test
-  void read_lookupFails_throwsNotFoundWithoutOpeningFile() {
+  void read_lookupFails_propagatesFailureWithoutOpeningFile() {
     when(documentRepository.findByOwnerIdAndNameAndDeletedAtIsNull(clientId, "notes.txt"))
         .thenThrow(new IllegalStateException("db down"));
 
-    ApiException ex =
-        assertThrows(ApiException.class, () -> documentService.read(client, "notes.txt"));
+    // read() does not wrap repository failures, so an unexpected lookup error propagates as-is
+    // rather than being reported as "document not found".
+    IllegalStateException ex =
+        assertThrows(
+            IllegalStateException.class, () -> documentService.read(client, "notes.txt"));
 
-    // The service treats any lookup failure as "document not found".
-    assertEquals(HttpStatus.NOT_FOUND, ex.getStatus());
+    assertEquals("db down", ex.getMessage());
     verifyNoInteractions(fileStorage);
   }
 
