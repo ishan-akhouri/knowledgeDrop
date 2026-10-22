@@ -1,9 +1,9 @@
 package dev.coms4156.knowledgedrop.service;
 
-import dev.coms4156.knowledgedrop.api.dto.DocumentReadResponse;
 import dev.coms4156.knowledgedrop.api.dto.DocumentStatusResponse;
 import dev.coms4156.knowledgedrop.api.dto.DocumentSummary;
 import dev.coms4156.knowledgedrop.api.dto.MessageResponse;
+import dev.coms4156.knowledgedrop.api.dto.ReadDocument;
 import dev.coms4156.knowledgedrop.exception.ApiException;
 import dev.coms4156.knowledgedrop.model.ClientRecord;
 import dev.coms4156.knowledgedrop.model.DocumentRecord;
@@ -20,9 +20,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -38,6 +37,7 @@ public class DocumentService {
   private final DocumentRepository documentRepository;
   private final IngestionService ingestionService;
   private final FileStorage fileStorage;
+  private final TransactionTemplate transactionTemplate;
 
   /**
    * Creates the service. For interacting with the database and the ingestion pipeline.
@@ -45,14 +45,18 @@ public class DocumentService {
    * @param documentRepository repository for storing and querying document records
    * @param ingestionService service that runs the ingestion pipeline for a document
    * @param fileStorage storage for the original uploaded files
+   * @param transactionManager transaction manager used to run multi-step database updates
+   *     atomically
    */
   public DocumentService(
       DocumentRepository documentRepository,
       IngestionService ingestionService,
-      FileStorage fileStorage) {
+      FileStorage fileStorage,
+      PlatformTransactionManager transactionManager) {
     this.documentRepository = documentRepository;
     this.ingestionService = ingestionService;
     this.fileStorage = fileStorage;
+    this.transactionTemplate = new TransactionTemplate(transactionManager);
   }
 
   /**
@@ -67,7 +71,6 @@ public class DocumentService {
    * @param file the uploaded binary file part
    * @return the document ID and its current status
    */
-  @Transactional
   public DocumentStatusResponse create(ClientRecord client, MultipartFile file) {
     UUID clientId;
     String fileName;
@@ -75,6 +78,7 @@ public class DocumentService {
     long fileSize;
     String sha1Hash;
     DocumentRecord newDocument;
+    DocumentRecord oldDocument = null;
 
     try {
       clientId = client.getId();
@@ -114,7 +118,7 @@ public class DocumentService {
       Optional<DocumentRecord> existing =
           documentRepository.findByOwnerIdAndNameAndDeletedAtIsNull(clientId, fileName);
       if (existing.isPresent()) {
-        deleteDocument(client.getId(), fileName);
+        oldDocument = existing.get();
       }
     } catch (Exception e) {
       throw ApiException.internalServerError(
@@ -123,25 +127,26 @@ public class DocumentService {
 
     try {
       newDocument = new DocumentRecord(clientId, fileName, fileType, fileSize, sha1Hash);
-      documentRepository.save(newDocument);
     } catch (Exception e) {
       throw ApiException.internalServerError(
           "Failed to create document record: " + e.getMessage());
+    }
+    if (oldDocument != null) {
+      replaceDocument(oldDocument, newDocument);
+    } else {
+      try {
+        documentRepository.save(newDocument);
+      } catch (Exception e) {
+        throw ApiException.internalServerError(
+            "Failed to save new document record: " + e.getMessage());
+      }
     }
 
 
     UUID documentId = newDocument.getId();
     DocumentStatus status = newDocument.getStatus();
 
-    // Start ingestion only after the transaction commits, so the ingestion thread can see the
-    // new record and never runs for a document whose transaction was rolled back.
-    TransactionSynchronizationManager.registerSynchronization(
-        new TransactionSynchronization() {
-          @Override
-          public void afterCommit() {
-            ingestionService.ingest(documentId);
-          }
-        });
+    ingestionService.ingest(documentId);
 
     return new DocumentStatusResponse(documentId, status);
   }
@@ -152,15 +157,47 @@ public class DocumentService {
    * <p>Only the client's non-deleted (deletedAt is null) document with this name is returned.
    *
    * @param client the authenticated caller
-   * @param name the document name (the original filename it was created with)
-   * @return content, document ID, filename, type, upload time, and status
+   * @param fileName the document name (the original filename it was created with)
+   * @return the document's file name, file type, file size, and an input stream over its content
    */
-  public DocumentReadResponse read(ClientRecord client, String name) {
-    // TODO: read: look up the non-deleted document for this client and name via
-    //   DocumentRepository.findByOwnerIdAndNameAndDeletedAtIsNull(client.getId(), name); return 404
-    //   with a reason if missing (soft-deleted documents count as missing).
-    // TODO: read: load the stored content from file storage and map to DocumentReadResponse.
-    throw ApiException.notImplemented("GET /knowledgeDrop/document/read");
+  public ReadDocument read(ClientRecord client, String fileName) {
+    UUID clientId;
+    DocumentRecord document;
+    try {
+      clientId = client.getId();
+    } catch (Exception e) {
+      throw ApiException.badRequest(
+          "Failed to extract information from request: " + e.getMessage());
+    }
+
+    document = documentRepository
+        .findByOwnerIdAndNameAndDeletedAtIsNull(clientId, fileName)
+        .orElseThrow(() -> ApiException.notFound("Document not found or has been deleted"));
+
+    // Stream #1: used only to verify the content hash; closed automatically.
+    try (InputStream hashStream = fileStorage.open(clientId, fileName)) {
+      String computedHash = computeSha1Hash(hashStream);
+      if (!computedHash.equals(document.getContentHash())) {
+        throw ApiException.internalServerError("File content hash mismatch");
+      }
+    } catch (ApiException e) {
+      throw e;
+    } catch (IOException e) {
+      throw ApiException.internalServerError("Failed to compute file hash: " + e.getMessage());
+    } catch (Exception e) {
+      throw ApiException.internalServerError("Unexpected error: " + e.getMessage());
+    }
+
+    // Stream #2: returned to the caller, who is responsible for closing it.
+    InputStream fileStream;
+    try {
+      fileStream = fileStorage.open(clientId, fileName);
+    } catch (Exception e) {
+      throw ApiException.internalServerError("Failed to reopen file content: " + e.getMessage());
+    }
+
+    return new ReadDocument(
+        document.getName(), document.getType(), document.getFileBytes(), fileStream);
   }
 
   /**
@@ -220,11 +257,26 @@ public class DocumentService {
     }
   }
 
-  private void deleteDocument(UUID clientId, String name) {
-    int updated = documentRepository.markDeletedByOwnerIdAndName(clientId, name, Instant.now());
-    if (updated == 0) {
-      throw ApiException.notFound(
-          "No non-deleted document found with name: " + clientId + "/" + name);
+  /**
+   * Soft-deletes the old document and saves the new one in a single transaction. If either save
+   * fails, both are rolled back, so the old document is never left deleted without a replacement.
+   * The transaction is committed before this method returns.
+   *
+   * @param oldDocument the existing document to soft-delete
+   * @param newDocument the new document that replaces it
+   * @throws ApiException if either save fails (both changes are rolled back)
+   */
+  private void replaceDocument(DocumentRecord oldDocument, DocumentRecord newDocument) {
+    try {
+      transactionTemplate.executeWithoutResult(status -> {
+        oldDocument.setDeletedAt(Instant.now());
+        documentRepository.save(oldDocument);
+        documentRepository.save(newDocument);
+      });
+    } catch (Exception e) {
+      throw ApiException.internalServerError(
+          "Failed to update document records: " + e.getMessage());
     }
   }
+
 }
