@@ -51,6 +51,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -70,6 +71,8 @@ class DocumentServiceTest {
   @Mock private IngestionService ingestionService;
 
   @Mock private FileStorage fileStorage;
+
+  @Mock private PlatformTransactionManager transactionManager;
 
   @InjectMocks private DocumentService documentService;
 
@@ -119,7 +122,8 @@ class DocumentServiceTest {
             new KnowledgeDropProperties.Retrieval(5, 60, 50),
             new KnowledgeDropProperties.Embedding("http://localhost:5000", "model", 384),
             new KnowledgeDropProperties.Llm("", "", ""));
-    return new DocumentService(documentRepository, ingestionService, new FileStorage(properties));
+    return new DocumentService(
+        documentRepository, ingestionService, new FileStorage(properties), transactionManager);
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -231,8 +235,6 @@ class DocumentServiceTest {
     ReflectionTestUtils.setField(existing, "id", UUID.randomUUID());
     when(documentRepository.findByOwnerIdAndNameAndDeletedAtIsNull(clientId, "notes.txt"))
         .thenReturn(Optional.of(existing));
-    when(documentRepository.markDeletedByOwnerIdAndName(eq(clientId), eq("notes.txt"), any()))
-        .thenReturn(1);
 
     documentService.create(client, textFile("notes.txt", "hello"));
 
@@ -354,23 +356,68 @@ class DocumentServiceTest {
     ReflectionTestUtils.setField(existing, "id", existingId);
     when(documentRepository.findByOwnerIdAndNameAndDeletedAtIsNull(clientId, "notes.txt"))
         .thenReturn(Optional.of(existing));
-    when(documentRepository.markDeletedByOwnerIdAndName(eq(clientId), eq("notes.txt"), any()))
-        .thenReturn(1);
 
     DocumentStatusResponse response =
         documentService.create(client, textFile("notes.txt", "hello"));
     assertEquals(DocumentStatus.PROCESSING, response.status());
 
-    verify(documentRepository)
-        .markDeletedByOwnerIdAndName(eq(clientId), eq("notes.txt"), any());
+    // The old record is soft-deleted and saved first, then the replacement is saved.
     ArgumentCaptor<DocumentRecord> captor = ArgumentCaptor.forClass(DocumentRecord.class);
-    verify(documentRepository).save(captor.capture());
-    DocumentRecord replacement = captor.getValue();
+    verify(documentRepository, times(2)).save(captor.capture());
+    DocumentRecord softDeleted = captor.getAllValues().get(0);
+    DocumentRecord replacement = captor.getAllValues().get(1);
+    assertSame(existing, softDeleted);
+    assertNotNull(softDeleted.getDeletedAt());
     assertNotEquals(existingId, replacement.getId());
     assertNull(replacement.getDeletedAt());
     assertEquals(HELLO_SHA1, replacement.getContentHash());
     assertEquals(replacement.getId(), response.documentId());
     // ingestion is deferred until commit; not exercised in unit tests for now
+  }
+
+  @Test
+  void create_existingDocumentWithSameName_savesBothRecordsInOneCommittedTransaction() {
+    saveAssignsIds();
+    DocumentRecord existing =
+        new DocumentRecord(clientId, "notes.txt", "text/plain", 3L, EMPTY_SHA1);
+    ReflectionTestUtils.setField(existing, "id", UUID.randomUUID());
+    when(documentRepository.findByOwnerIdAndNameAndDeletedAtIsNull(clientId, "notes.txt"))
+        .thenReturn(Optional.of(existing));
+
+    documentService.create(client, textFile("notes.txt", "hello"));
+
+    InOrder order = inOrder(transactionManager, documentRepository);
+    order.verify(transactionManager).getTransaction(any());
+    order.verify(documentRepository, times(2)).save(any(DocumentRecord.class));
+    order.verify(transactionManager).commit(any());
+    verify(transactionManager, never()).rollback(any());
+  }
+
+  @Test
+  void create_existingDocumentWithSameName_newRecordSaveFails_rollsBackAndSkipsIngestion() {
+    DocumentRecord existing =
+        new DocumentRecord(clientId, "notes.txt", "text/plain", 3L, EMPTY_SHA1);
+    ReflectionTestUtils.setField(existing, "id", UUID.randomUUID());
+    when(documentRepository.findByOwnerIdAndNameAndDeletedAtIsNull(clientId, "notes.txt"))
+        .thenReturn(Optional.of(existing));
+    // Soft-deleting the old record succeeds, but saving the replacement fails.
+    when(documentRepository.save(any(DocumentRecord.class)))
+        .thenAnswer(
+            invocation -> {
+              DocumentRecord record = invocation.getArgument(0);
+              if (record == existing) {
+                return record;
+              }
+              throw new IllegalStateException("db down");
+            });
+    MockMultipartFile file = textFile("notes.txt", "hello");
+
+    ApiException ex = assertThrows(ApiException.class, () -> documentService.create(client, file));
+
+    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatus());
+    verify(transactionManager).rollback(any());
+    verify(transactionManager, never()).commit(any());
+    verifyNoInteractions(ingestionService);
   }
 
   // ---------------------------------------------------------------------------------------------
