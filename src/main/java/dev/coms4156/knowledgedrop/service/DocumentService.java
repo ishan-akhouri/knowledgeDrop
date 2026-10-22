@@ -1,9 +1,9 @@
 package dev.coms4156.knowledgedrop.service;
 
-import dev.coms4156.knowledgedrop.api.dto.DocumentContent;
 import dev.coms4156.knowledgedrop.api.dto.DocumentStatusResponse;
 import dev.coms4156.knowledgedrop.api.dto.DocumentSummary;
 import dev.coms4156.knowledgedrop.api.dto.MessageResponse;
+import dev.coms4156.knowledgedrop.api.dto.ReadDocument;
 import dev.coms4156.knowledgedrop.exception.ApiException;
 import dev.coms4156.knowledgedrop.model.ClientRecord;
 import dev.coms4156.knowledgedrop.model.DocumentRecord;
@@ -161,9 +161,9 @@ public class DocumentService {
    *
    * @param client the authenticated caller
    * @param fileName the document name (the original filename it was created with)
-   * @return content, document ID, filename, type, upload time, and status
+   * @return the document's file name, file type, file size, and an input stream over its content
    */
-  public DocumentContent read(ClientRecord client, String fileName) {
+  public ReadDocument read(ClientRecord client, String fileName) {
     UUID clientId;
     InputStream fileStream;
     String sha1Hash;
@@ -207,7 +207,8 @@ public class DocumentService {
       throw ApiException.internalServerError("Failed to reopen file content: " + e.getMessage());
     }
 
-    return new DocumentContent(document, fileStream);
+    return new ReadDocument(
+        document.getName(), document.getType(), document.getFileBytes(), fileStream);
   }
 
   /**

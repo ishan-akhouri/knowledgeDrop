@@ -1,12 +1,11 @@
 package dev.coms4156.knowledgedrop.api;
 
-import dev.coms4156.knowledgedrop.api.dto.DocumentContent;
 import dev.coms4156.knowledgedrop.api.dto.DocumentStatusResponse;
 import dev.coms4156.knowledgedrop.api.dto.DocumentSummary;
 import dev.coms4156.knowledgedrop.api.dto.MessageResponse;
+import dev.coms4156.knowledgedrop.api.dto.ReadDocument;
 import dev.coms4156.knowledgedrop.exception.ApiException;
 import dev.coms4156.knowledgedrop.model.ClientRecord;
-import dev.coms4156.knowledgedrop.model.DocumentRecord;
 import dev.coms4156.knowledgedrop.security.AuthInterceptor;
 import dev.coms4156.knowledgedrop.service.DocumentService;
 import java.io.InputStream;
@@ -73,19 +72,18 @@ public class DocumentController {
   public ResponseEntity<InputStreamResource> read(
       @RequestAttribute(AuthInterceptor.CLIENT_ATTRIBUTE) ClientRecord client,
       @RequestParam(value = "documentName", required = false) String documentName) {
-    DocumentContent documentContent = documentService.read(client, requireName(documentName));
-    
-    DocumentRecord document = documentContent.document();
-    InputStream stream = documentContent.stream();
+    ReadDocument readDocument = documentService.read(client, requireName(documentName));
+
+    InputStream stream = readDocument.inputStream();
 
     ContentDisposition disposition = ContentDisposition.attachment()
-        .filename(document.getName(), StandardCharsets.UTF_8)
+        .filename(readDocument.fileName(), StandardCharsets.UTF_8)
         .build();
 
     return ResponseEntity.ok()
         .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
-        .contentType(MediaType.parseMediaType(document.getType()))
-        .contentLength(document.getFileBytes())
+        .contentType(MediaType.parseMediaType(readDocument.fileType()))
+        .contentLength(readDocument.fileSize())
         .body(new InputStreamResource(stream));
   }
 

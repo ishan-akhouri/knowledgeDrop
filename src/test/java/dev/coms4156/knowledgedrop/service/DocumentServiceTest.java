@@ -18,8 +18,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import dev.coms4156.knowledgedrop.api.dto.DocumentContent;
 import dev.coms4156.knowledgedrop.api.dto.DocumentStatusResponse;
+import dev.coms4156.knowledgedrop.api.dto.ReadDocument;
 import dev.coms4156.knowledgedrop.config.KnowledgeDropProperties;
 import dev.coms4156.knowledgedrop.exception.ApiException;
 import dev.coms4156.knowledgedrop.model.ClientRecord;
@@ -517,15 +517,17 @@ class DocumentServiceTest {
   }
 
   @Test
-  void read_existingDocument_returnsItsRecord() throws Exception {
+  void read_existingDocument_returnsItsMetadata() throws Exception {
     DocumentRecord record = storedRecord("notes.txt", 5L, HELLO_SHA1);
     stubExisting(record);
     stubStoredContent("notes.txt", "hello");
 
-    DocumentContent content = documentService.read(client, "notes.txt");
+    ReadDocument content = documentService.read(client, "notes.txt");
 
-    assertSame(record, content.document());
-    assertNotNull(content.stream());
+    assertEquals("notes.txt", content.fileName());
+    assertEquals("text/plain", content.fileType());
+    assertEquals(5L, content.fileSize());
+    assertNotNull(content.inputStream());
   }
 
   @Test
@@ -533,9 +535,9 @@ class DocumentServiceTest {
     stubExisting(storedRecord("notes.txt", 5L, HELLO_SHA1));
     stubStoredContent("notes.txt", "hello");
 
-    DocumentContent content = documentService.read(client, "notes.txt");
+    ReadDocument content = documentService.read(client, "notes.txt");
 
-    try (InputStream in = content.stream()) {
+    try (InputStream in = content.inputStream()) {
       assertEquals("hello", new String(in.readAllBytes(), StandardCharsets.UTF_8));
     }
   }
@@ -545,9 +547,9 @@ class DocumentServiceTest {
     stubExisting(storedRecord("empty.txt", 0L, EMPTY_SHA1));
     stubStoredContent("empty.txt", "");
 
-    DocumentContent content = documentService.read(client, "empty.txt");
+    ReadDocument content = documentService.read(client, "empty.txt");
 
-    try (InputStream in = content.stream()) {
+    try (InputStream in = content.inputStream()) {
       assertEquals(0, in.readAllBytes().length);
     }
   }
@@ -685,10 +687,10 @@ class DocumentServiceTest {
   void read_realStorage_returnsContentWrittenByCreate(@TempDir Path dataDir) throws Exception {
     DocumentService service = createThenExpose(dataDir, "notes.txt", "hello");
 
-    DocumentContent content = service.read(client, "notes.txt");
+    ReadDocument content = service.read(client, "notes.txt");
 
-    assertEquals("notes.txt", content.document().getName());
-    try (InputStream in = content.stream()) {
+    assertEquals("notes.txt", content.fileName());
+    try (InputStream in = content.inputStream()) {
       assertEquals("hello", new String(in.readAllBytes(), StandardCharsets.UTF_8));
     }
   }
