@@ -30,8 +30,8 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * Document management endpoints. All are TODO: the controller wiring, parameters, and status codes
- * are in place; the logic lives in {@link DocumentService}.
+ * Document management endpoints: create, read, delete, and list. The controller handles routing,
+ * parameters, and status codes; the logic lives in {@link DocumentService}.
  *
  * <p>Create takes {@code multipart/form-data} with a single binary {@code file} part; the document
  * name is the file's original filename and its type is the file's content type. If the client
@@ -59,7 +59,8 @@ public class DocumentController {
 
   /**
    * Uploads a document (a single binary file part) and starts ingestion. If a document with that
-   * name already exists, it is soft-deleted and the upload gets a new ID. TODO(create).
+   * name already exists, it is soft-deleted and the upload gets a new ID. Returns 202 Accepted
+   * with the document ID and status, since ingestion continues in the background.
    */
   @PostMapping(path = "/create", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   public ResponseEntity<DocumentStatusResponse> create(
@@ -69,7 +70,11 @@ public class DocumentController {
     return ResponseEntity.status(HttpStatus.ACCEPTED).body(body);
   }
 
-  /** Returns the content and metadata of the client's non-deleted document. */
+  /**
+   * Streams the stored file of the client's non-deleted document, with the document's content
+   * type, length, and an attachment filename. Returns 400 if {@code documentName} is missing or
+   * blank, and 404 if there is no such document.
+   */
   @GetMapping("/read")
   public ResponseEntity<InputStreamResource> read(
       @RequestAttribute(AuthInterceptor.CLIENT_ATTRIBUTE) ClientRecord client,
@@ -110,7 +115,10 @@ public class DocumentController {
     }
   }
 
-  /** Soft-deletes the client's document with the given name. TODO(delete). */
+  /**
+   * Soft-deletes the client's document with the given name. Returns 400 if {@code documentName}
+   * is missing or blank, and 404 if there is no such document.
+   */
   @DeleteMapping("/delete")
   public MessageResponse delete(
       @RequestAttribute(AuthInterceptor.CLIENT_ATTRIBUTE) ClientRecord client,
@@ -125,7 +133,10 @@ public class DocumentController {
     return documentName.trim();
   }
 
-  /** Lists the caller's documents, optionally filtered and paginated. TODO(list). */
+  /**
+   * Lists the caller's non-deleted documents, newest first, optionally filtered by {@code status}
+   * and paginated with {@code limit} and {@code offset}.
+   */
   @GetMapping("/list")
   public List<DocumentSummary> list(
       @RequestAttribute(AuthInterceptor.CLIENT_ATTRIBUTE) ClientRecord client,
