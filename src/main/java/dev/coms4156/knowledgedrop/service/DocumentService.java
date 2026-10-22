@@ -209,18 +209,40 @@ public class DocumentService {
    * Soft-deletes a document: the record is kept but marked as deleted.
    *
    * @param client the authenticated caller
-   * @param name the document name (the original filename it was created with)
+   * @param fileName the document name (the original filename it was created with)
    * @return confirmation message
    */
-  public MessageResponse delete(ClientRecord client, String name) {
-    // TODO: delete: look up the non-deleted document for this client and name via
-    //   DocumentRepository.findByOwnerIdAndNameAndDeletedAtIsNull(client.getId(), name); return 404
-    //   with a reason if missing.
-    // TODO: delete: mark it deleted with setDeletedAt(Instant.now()) and save the record. The
-    //   name then becomes free for create to reuse with a new document.
-    // TODO: delete: remove the document's Elasticsearch chunk entries and embeddings so a deleted
-    //   document never appears in search results.
-    throw ApiException.notImplemented("DELETE /knowledgeDrop/document/delete");
+  public MessageResponse delete(ClientRecord client, String fileName) {
+    UUID clientId;
+    DocumentRecord document;
+
+    try {
+      clientId = client.getId();
+    } catch (Exception e) {
+      throw ApiException.badRequest(
+          "Failed to extract information from request: " + e.getMessage());
+    }
+
+    try {
+      document = documentRepository
+          .findByOwnerIdAndNameAndDeletedAtIsNull(clientId, fileName)
+          .orElseThrow(() -> ApiException.notFound("Document not found or has been deleted"));
+    } catch (Exception e) {
+      throw ApiException.internalServerError(
+          "Failed to check for existing documents: " + e.getMessage());
+    }
+
+    try {
+      document.setDeletedAt(Instant.now());
+      documentRepository.save(document);
+    } catch (Exception e) {
+      throw ApiException.internalServerError(
+          "Failed to mark document as deleted: " + e.getMessage());
+    }
+
+    ingestionService.deleteChunks(document.getId());
+
+    return new MessageResponse("Document '" + fileName + "' has been deleted");
   }
 
   /**
