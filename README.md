@@ -80,18 +80,22 @@ erDiagram
         varchar doc_type "Required; MIME type, up to 127 characters"
         varchar status "Required; PROCESSING, READY, or FAILED"
         varchar failure_reason "Optional; up to 1000 characters"
-        bigint file_bytes "Content size in bytes"
-        varchar content_hash "Optional; 40-character SHA-1 hex digest"
+        bigint file_bytes "Content size in bytes; never negative"
+        varchar content_hash "40-character lowercase SHA-1 hex digest"
         timestamptz uploaded_at "Required; upload time"
         timestamptz deleted_at "Optional; null means not deleted"
+        varchar active_key UK "Derived; ownerId/name while not deleted, null once deleted; up to 320 characters"
     }
 ```
 
 - **Keys and ownership:** `PK` = primary key; `UK` = unique column. The ownership relationship is logical: `owner_id` has no declared foreign key or cascading deletion.
-- **Document names:** uniqueness per owner among non-deleted documents must be enforced by the application; there is no database unique constraint on `(owner_id, name)`.
-- **Soft deletion:** `deleted_at IS NULL` identifies non-deleted records. Queries must apply this filter explicitly; ingestion `status` is independent.
+- **Document names:** `(owner_id, name)` is unique among non-deleted documents. The database enforces this through the unique `active_key` column (constraint `uk_documents_active_owner_name`) rather than a plain unique constraint on `(owner_id, name)`, which would block re-uploading a deleted name.
+- **`active_key`:** derived by `DocumentRecord`, never set directly. It holds `ownerId/name` while `deleted_at` is null and becomes null when the document is soft-deleted. Unique constraints allow multiple nulls, so any number of deleted documents may share a name. Clearing `deleted_at` claims the name again and fails at save time if another non-deleted document already holds it.
+- **Soft deletion:** `deleted_at IS NULL` identifies non-deleted records. Queries must apply this filter explicitly; ingestion `status` is independent. `DocumentRecord.setDeletedAt` keeps `active_key` in sync.
+- **Content metadata:** `file_bytes` and `content_hash` are computed by `DocumentService` at upload and validated by the `DocumentRecord` constructor (size must not be negative; hash must be 40 lowercase hex characters). `document/read` recomputes the stored file's SHA-1 and fails with HTTP 500 if it does not match `content_hash`.
+- **Status lifecycle:** a new record starts as `PROCESSING`. `markReady` and `markProcessing` clear `failure_reason`; `markFailed` stores the reason, truncated to 1000 characters.
 - **Storage:** PostgreSQL holds metadata, not file contents. Chunk text and embeddings live in Elasticsearch, keyed by document ID.
-- **Schema source:** [ClientRecord](src/main/java/dev/coms4156/knowledgedrop/model/ClientRecord.java) and [DocumentRecord](src/main/java/dev/coms4156/knowledgedrop/model/DocumentRecord.java) define the mappings. [application.yml](src/main/resources/application.yml) enables `ddl-auto: update` at startup; obsolete columns or constraints may remain in existing databases.
+- **Schema source:** [ClientRecord](src/main/java/dev/coms4156/knowledgedrop/model/ClientRecord.java) and [DocumentRecord](src/main/java/dev/coms4156/knowledgedrop/model/DocumentRecord.java) define the mappings. [application.yml](src/main/resources/application.yml) enables `ddl-auto: update` at startup; obsolete columns or constraints may remain in existing databases. Rows created before `active_key` existed have it null and are not covered by the name constraint; for local development, wipe the data volumes (see Client Registration).
 
 ## Conventions
 
@@ -100,6 +104,7 @@ erDiagram
 - **Document names:** a document's name is the original filename of the uploaded file. `read` and `delete` identify a document by its name (the `documentName` query parameter), so names are unique per client among non-deleted documents. Soft-deleted documents are ignored by name lookups, so a deleted name can be reused by a later `create`. Uploading a file whose name matches one of the client's existing documents soft-deletes that document and stores the upload as a new document with a new document ID, which is then ingested. `create` returns HTTP 400 if the upload has no filename.
 - **Upload requirements:** an uploaded file must not be empty, must not be larger than 10 GB, and must have a non-blank filename (the filename becomes the document name). `create` rejects any upload that breaks these rules.
 - **Ingestion pipeline:** `create` extracts text (direct read for text files, text extraction for PDFs, OCR for images, keeping page numbers), splits it into chunks, embeds each chunk into the Elasticsearch vector store, and indexes each chunk's text in Elasticsearch for keyword search. Ingestion runs in the background, so `create` returns `202 Accepted` with status `processing`.
+- **Responses:** endpoints return JSON, except `document/read`, which returns the raw file bytes with the document's own content type.
 - **Errors:** always `{"error": "Not Found", "reason": "..."}`.
 
 ## API Reference
@@ -146,10 +151,10 @@ Registration and health checks require no token.
 
 | Method | Endpoint | Inputs | Behavior |
 |---|---|---|---|
-| POST | `/knowledgeDrop/document/create` | Token, file (a multipart `file` part) | Uses the file's original filename as the document name and its content type (for example, `application/pdf` or `text/plain`) as the MIME type. If the client already has a non-deleted document with that name, soft-deletes it and removes its chunks and embeddings from Elasticsearch, so the old document no longer appears in search. Always creates a new document with a new document ID, stores the file, runs the ingestion pipeline, and returns the new document ID and status `processing`. Errors on a missing or blank filename, an unsupported type, empty content, or a file larger than 10 GB. |
-| GET | `/knowledgeDrop/document/read` | Token, `documentName` | Looks up the client's non-deleted document with that name. Returns the content, ID, filename, type, upload time, and status, or HTTP 404 if there is none (including if it was deleted). Returns HTTP 400 if `documentName` is missing or blank. |
-| DELETE | `/knowledgeDrop/document/delete` | Token, `documentName` | Soft-deletes the client's non-deleted document with that name by setting `deleted_at` on its record, and removes its Elasticsearch chunk entries and embeddings so it no longer appears in search. Returns HTTP 404 if there is none, or HTTP 400 if `documentName` is missing or blank. |
-| GET | `/knowledgeDrop/document/list` | Token, optional `status`, `limit`, `offset` | Returns the client's documents with ID, filename, type, upload time, and status. Returns an empty list if there are none. |
+| POST | `/knowledgeDrop/document/create` | Token, file (a multipart `file` part) | Uses the file's original filename as the document name and its content type (for example, `application/pdf` or `text/plain`) as the MIME type. If the client already has a non-deleted document with that name, soft-deletes it and creates the new document in the same transaction; once that commits, removes the old document's chunks and embeddings from Elasticsearch (via `IngestionService.deleteChunks`), so the old document no longer appears in search. Always creates a new document with a new document ID, saves the file to disk (overwriting any earlier file stored under the same client and name), records its SHA-1 hash and size, starts the background ingestion pipeline, and returns HTTP 202 with the new document ID and status `processing`. Returns HTTP 400 for a missing or blank filename or empty content, and HTTP 413 for a file larger than 10 GB. |
+| GET | `/knowledgeDrop/document/read` | Token, `documentName` | Looks up the client's non-deleted document with that name. Returns the stored file itself as the raw response body (a Spring `ResponseEntity<InputStreamResource>`, streamed from storage), not a JSON object. The `Content-Type` header is the document's stored MIME type and `Content-Length` is its size in bytes. Before streaming, recomputes the stored file's SHA-1 and returns HTTP 500 if it does not match the hash recorded at upload. Returns HTTP 404 (JSON error body) if there is none (including if it was deleted), or HTTP 400 if `documentName` is missing or blank. Use `document/list` to get a document's ID, type, upload time, and status. |
+| DELETE | `/knowledgeDrop/document/delete` | Token, `documentName` | Soft-deletes the client's non-deleted document with that name by setting `deleted_at` on its record, then asks `IngestionService.deleteChunks` to remove its Elasticsearch chunk entries and embeddings so it no longer appears in search. The stored file is kept, and the name can be reused by a later `create`. Returns HTTP 200 with a confirmation message, HTTP 404 if there is none, or HTTP 400 if `documentName` is missing or blank. |
+| GET | `/knowledgeDrop/document/list` | Token, optional `status`, `limit`, `offset` (query parameters) | Returns a JSON array of the client's non-deleted documents, newest upload first. Each entry has `documentId`, `filename`, `type`, `uploadTime`, and `status`. `status` filters by `processing`, `ready`, `failed`, or `all` (case-insensitive; omitted, blank, or `all` returns every status); any other value returns HTTP 400. `limit` is the page size and `offset` is the number of documents to skip. A missing, zero, or negative `limit` returns all remaining documents, and a missing or negative `offset` is treated as 0. Returns an empty list if there are none. |
 
 ### Question Answering and Similarity
 
@@ -231,12 +236,21 @@ curl -s -X POST localhost:8080/knowledgeDrop/client/register \
 TOKEN=<clientToken>
 curl -s localhost:8080/knowledgeDrop/document/list -H "Authorization: Bearer $TOKEN"
 
+# list: filter by status and paginate (the 2nd page of 10 ready documents)
+curl -s -G localhost:8080/knowledgeDrop/document/list -H "Authorization: Bearer $TOKEN" \
+  --data-urlencode 'status=ready' --data-urlencode 'limit=10' --data-urlencode 'offset=10'
+# => [{"documentId":"...","filename":"policy.pdf","type":"application/pdf","uploadTime":"...","status":"ready"}]
+
 # create: a single file part; the document name is the file's name (policy.pdf)
 curl -s -X POST localhost:8080/knowledgeDrop/document/create -H "Authorization: Bearer $TOKEN" \
   -F 'file=@policy.pdf;type=application/pdf'
+
+# read: returns the file itself, so save it to disk with -o
+curl -s -G localhost:8080/knowledgeDrop/document/read -H "Authorization: Bearer $TOKEN" \
+  --data-urlencode 'documentName=policy.pdf' -o policy-downloaded.pdf
 ```
 
-`create` uses `multipart/form-data` with a binary `file` part. The document name is the file's original filename, and the MIME type is the file's content type (the filename extension is used if the client sends `application/octet-stream`). Uploading again with the same filename soft-deletes the earlier document and creates a new one with a new document ID.
+`create` uses `multipart/form-data` with a binary `file` part. The document name is the file's original filename, and the MIME type is the file's content type as sent by the client. Original files are stored at `{storageDir}/{clientId}/{fileName}` (default `./data/files`). Uploading again with the same filename soft-deletes the earlier document and creates a new one with a new document ID.
 
 ### Implementation status
 
@@ -245,11 +259,11 @@ Endpoint logic that is not built yet is marked with a `TODO:` comment that names
 | Endpoint | Status | Implement in |
 |---|---|---|
 | `POST registerClient` | **Built** (reference implementation) | `ClientService.register` |
-| `POST document/create` (a same-name upload soft-deletes the old document and creates a new one) | To do | `DocumentService.create` |
-| `GET document/read` | To do | `DocumentService.read` |
-| `DELETE document/delete` | To do | `DocumentService.delete` |
-| `GET document/list` | To do | `DocumentService.list` |
-| `DELETE client/delete` | **Built** | `ClientService.delete` |
+| `POST document/create` (a same-name upload soft-deletes the old document and creates a new one) | **Built**; the ingestion pipeline and `IngestionService.deleteChunks`, which it calls to remove a replaced document's chunks, are still stubs | `DocumentService.create` |
+| `GET document/read` | **Built** | `DocumentService.read` |
+| `DELETE document/delete` | **Built** (soft-delete); the chunk removal it calls, `IngestionService.deleteChunks`, is still a stub | `DocumentService.delete` |
+| `GET document/list` | **Built** | `DocumentService.list` |
+| `DELETE clientDrop` | To do | `ClientService.drop` |
 | `GET health` | To do | `HealthService.check` |
 | Ingestion pipeline (extract, chunk, keyword index) | To do | `IngestionService` |
 | `POST ask` | **DEFERRED** (LLM + embeddings) | `AskService.ask` |
