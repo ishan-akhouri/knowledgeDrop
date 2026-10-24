@@ -135,7 +135,7 @@ public class DocumentService {
       replaceDocument(oldDocument, newDocument);
     } else {
       try {
-        documentRepository.save(newDocument);
+        documentRepository.saveAndFlush(newDocument);
       } catch (Exception e) {
         throw ApiException.internalServerError(
             "Failed to save new document record: " + e.getMessage());
@@ -270,8 +270,8 @@ public class DocumentService {
     try {
       transactionTemplate.executeWithoutResult(status -> {
         oldDocument.setDeletedAt(Instant.now());
-        documentRepository.save(oldDocument);
-        documentRepository.save(newDocument);
+        documentRepository.saveAndFlush(oldDocument);
+        documentRepository.saveAndFlush(newDocument);
       });
     } catch (Exception e) {
       throw ApiException.internalServerError(
