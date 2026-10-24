@@ -47,6 +47,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.invocation.InvocationOnMock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockMultipartFile;
@@ -97,15 +98,24 @@ class DocumentServiceTest {
 
   /** Makes the mocked repository assign an ID to any record that does not have one yet. */
   private void saveAssignsIds() {
-    when(documentRepository.save(any(DocumentRecord.class)))
-        .thenAnswer(
-            invocation -> {
-              DocumentRecord record = invocation.getArgument(0);
-              if (record.getId() == null) {
-                ReflectionTestUtils.setField(record, "id", UUID.randomUUID());
-              }
-              return record;
-            });
+    when(documentRepository.save(any(DocumentRecord.class))).thenAnswer(DocumentServiceTest::assignId);
+  }
+
+  /**
+   * Same as {@link #saveAssignsIds()} for saveAndFlush, which the replace path uses so the old
+   * record's active key is cleared before the new record is inserted.
+   */
+  private void saveAndFlushAssignsIds() {
+    when(documentRepository.saveAndFlush(any(DocumentRecord.class)))
+        .thenAnswer(DocumentServiceTest::assignId);
+  }
+
+  private static DocumentRecord assignId(InvocationOnMock invocation) {
+    DocumentRecord record = invocation.getArgument(0);
+    if (record.getId() == null) {
+      ReflectionTestUtils.setField(record, "id", UUID.randomUUID());
+    }
+    return record;
   }
 
   private static MockMultipartFile textFile(String name, String content) {
@@ -229,7 +239,7 @@ class DocumentServiceTest {
 
   @Test
   void create_existingDocumentWithSameName_savesNewFileOnce() throws Exception {
-    saveAssignsIds();
+    saveAndFlushAssignsIds();
     DocumentRecord existing =
         new DocumentRecord(clientId, "notes.txt", "text/plain", 3L, EMPTY_SHA1);
     ReflectionTestUtils.setField(existing, "id", UUID.randomUUID());
@@ -349,7 +359,7 @@ class DocumentServiceTest {
 
   @Test
   void create_existingDocumentWithSameName_softDeletesOldAndIngestsNew() {
-    saveAssignsIds();
+    saveAndFlushAssignsIds();
     DocumentRecord existing =
         new DocumentRecord(clientId, "notes.txt", "text/plain", 3L, EMPTY_SHA1);
     UUID existingId = UUID.randomUUID();
@@ -363,7 +373,7 @@ class DocumentServiceTest {
 
     // The old record is soft-deleted and saved first, then the replacement is saved.
     ArgumentCaptor<DocumentRecord> captor = ArgumentCaptor.forClass(DocumentRecord.class);
-    verify(documentRepository, times(2)).save(captor.capture());
+    verify(documentRepository, times(2)).saveAndFlush(captor.capture());
     DocumentRecord softDeleted = captor.getAllValues().get(0);
     DocumentRecord replacement = captor.getAllValues().get(1);
     assertSame(existing, softDeleted);
@@ -377,7 +387,7 @@ class DocumentServiceTest {
 
   @Test
   void create_existingDocumentWithSameName_savesBothRecordsInOneCommittedTransaction() {
-    saveAssignsIds();
+    saveAndFlushAssignsIds();
     DocumentRecord existing =
         new DocumentRecord(clientId, "notes.txt", "text/plain", 3L, EMPTY_SHA1);
     ReflectionTestUtils.setField(existing, "id", UUID.randomUUID());
@@ -388,7 +398,7 @@ class DocumentServiceTest {
 
     InOrder order = inOrder(transactionManager, documentRepository);
     order.verify(transactionManager).getTransaction(any());
-    order.verify(documentRepository, times(2)).save(any(DocumentRecord.class));
+    order.verify(documentRepository, times(2)).saveAndFlush(any(DocumentRecord.class));
     order.verify(transactionManager).commit(any());
     verify(transactionManager, never()).rollback(any());
   }
@@ -401,7 +411,7 @@ class DocumentServiceTest {
     when(documentRepository.findByOwnerIdAndNameAndDeletedAtIsNull(clientId, "notes.txt"))
         .thenReturn(Optional.of(existing));
     // Soft-deleting the old record succeeds, but saving the replacement fails.
-    when(documentRepository.save(any(DocumentRecord.class)))
+    when(documentRepository.saveAndFlush(any(DocumentRecord.class)))
         .thenAnswer(
             invocation -> {
               DocumentRecord record = invocation.getArgument(0);

@@ -135,7 +135,7 @@ public class DocumentService {
       replaceDocument(oldDocument, newDocument);
     } else {
       try {
-        documentRepository.saveAndFlush(newDocument);
+        documentRepository.save(newDocument);
       } catch (Exception e) {
         throw ApiException.internalServerError(
             "Failed to save new document record: " + e.getMessage());
