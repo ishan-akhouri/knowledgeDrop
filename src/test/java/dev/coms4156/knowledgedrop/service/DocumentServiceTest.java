@@ -98,7 +98,8 @@ class DocumentServiceTest {
 
   /** Makes the mocked repository assign an ID to any record that does not have one yet. */
   private void saveAssignsIds() {
-    when(documentRepository.save(any(DocumentRecord.class))).thenAnswer(DocumentServiceTest::assignId);
+    when(documentRepository.save(any(DocumentRecord.class)))
+        .thenAnswer(DocumentServiceTest::assignId);
   }
 
   /**
