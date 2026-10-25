@@ -43,6 +43,9 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class DocumentService {
 
+  /** Page size used by {@link #list} when no positive {@code limit} is given. */
+  static final int DEFAULT_LIST_LIMIT = 1000;
+
   private final DocumentRepository documentRepository;
   private final IngestionService ingestionService;
   private final FileStorage fileStorage;
@@ -277,7 +280,8 @@ public class DocumentService {
    * @param client the authenticated caller
    * @param status optional status filter: "processing", "ready", "failed" or "all"; defaults to
    *     "all"
-   * @param limit optional page size; missing, zero or negative returns all remaining documents
+   * @param limit optional page size; missing, zero or negative defaults to
+   *     {@value #DEFAULT_LIST_LIMIT}
    * @param offset optional number of documents to skip; missing or negative is treated as 0
    * @return matching documents, or an empty list if the client has none
    * @throws ApiException 400 if {@code status} is not a recognized value
@@ -291,7 +295,7 @@ public class DocumentService {
       throw ApiException.badRequest(
           "Failed to extract information from request: " + e.getMessage());
     }
-    int pageSize = (limit == null || limit <= 0) ? Integer.MAX_VALUE : limit;
+    int pageSize = (limit == null || limit <= 0) ? DEFAULT_LIST_LIMIT : limit;
     long skip = (offset == null || offset < 0) ? 0 : offset;
     Pageable pageable = new OffsetPageRequest(skip, pageSize);
 

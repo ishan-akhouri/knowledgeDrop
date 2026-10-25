@@ -231,11 +231,11 @@ class DocumentServiceListTest {
   // ---------------------------------------------------------------------------------------------
 
   @Test
-  void list_noLimitOrOffset_startsAtZeroWithUnboundedPageSize() {
+  void list_noLimitOrOffset_startsAtZeroWithDefaultPageSize() {
     Pageable pageable = pageableSentForAllQuery(null, null);
 
     assertEquals(0L, pageable.getOffset());
-    assertEquals(Integer.MAX_VALUE, pageable.getPageSize());
+    assertEquals(DocumentService.DEFAULT_LIST_LIMIT, pageable.getPageSize());
   }
 
   @Test
@@ -263,19 +263,19 @@ class DocumentServiceListTest {
   }
 
   @Test
-  void list_offsetWithoutLimit_skipsRowsAndKeepsPageUnbounded() {
+  void list_offsetWithoutLimit_skipsRowsAndUsesDefaultPageSize() {
     Pageable pageable = pageableSentForAllQuery(null, 12);
 
     assertEquals(12L, pageable.getOffset());
-    assertEquals(Integer.MAX_VALUE, pageable.getPageSize());
+    assertEquals(DocumentService.DEFAULT_LIST_LIMIT, pageable.getPageSize());
   }
 
   @ParameterizedTest
   @ValueSource(ints = {0, -1, -100})
-  void list_nonPositiveLimit_meansNoLimit(int limit) {
+  void list_nonPositiveLimit_usesDefaultLimit(int limit) {
     Pageable pageable = pageableSentForAllQuery(limit, 2);
 
-    assertEquals(Integer.MAX_VALUE, pageable.getPageSize());
+    assertEquals(DocumentService.DEFAULT_LIST_LIMIT, pageable.getPageSize());
     assertEquals(2L, pageable.getOffset());
   }
 
