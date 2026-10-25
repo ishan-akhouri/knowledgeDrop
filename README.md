@@ -151,10 +151,10 @@ Registration and health checks require no token.
 
 | Method | Endpoint | Inputs | Behavior |
 |---|---|---|---|
-| POST | `/knowledgeDrop/document/create` | Token, file (a multipart `file` part) | Uses the file's original filename as the document name and its content type (for example, `application/pdf` or `text/plain`) as the MIME type. If the client already has a non-deleted document with that name, soft-deletes it and removes its chunks and embeddings from Elasticsearch, so the old document no longer appears in search. Always creates a new document with a new document ID, stores the file, runs the ingestion pipeline, and returns the new document ID and status `processing`. Errors on a missing or blank filename, an unsupported type, empty content, or a file larger than 10 GB. |
-| GET | `/knowledgeDrop/document/read` | Token, `documentName` | Looks up the client's non-deleted document with that name. Returns the stored file itself as the raw response body (a Spring `ResponseEntity<InputStreamResource>`, streamed from storage), not a JSON object. The `Content-Type` header is the document's stored MIME type and `Content-Length` is its size in bytes. Returns HTTP 404 (JSON error body) if there is none (including if it was deleted), or HTTP 400 if `documentName` is missing or blank. Use `document/list` to get a document's ID, type, upload time, and status. |
-| DELETE | `/knowledgeDrop/document/delete` | Token, `documentName` | Soft-deletes the client's non-deleted document with that name by setting `deleted_at` on its record, and removes its Elasticsearch chunk entries and embeddings so it no longer appears in search. Returns HTTP 404 if there is none, or HTTP 400 if `documentName` is missing or blank. |
-| GET | `/knowledgeDrop/document/list` | Token, optional `status`, `limit`, `offset` | Returns the client's documents with ID, filename, type, upload time, and status. Returns an empty list if there are none. |
+| POST | `/knowledgeDrop/document/create` | Token, file (a multipart `file` part) | Uses the file's original filename as the document name and its content type (for example, `application/pdf` or `text/plain`) as the MIME type. If the client already has a non-deleted document with that name, soft-deletes it and creates the new document in the same transaction; once that commits, removes the old document's chunks and embeddings from Elasticsearch (via `IngestionService.deleteChunks`), so the old document no longer appears in search. Always creates a new document with a new document ID, saves the file to disk (overwriting any earlier file stored under the same client and name), records its SHA-1 hash and size, starts the background ingestion pipeline, and returns HTTP 202 with the new document ID and status `processing`. Returns HTTP 400 for a missing or blank filename or empty content, and HTTP 413 for a file larger than 10 GB. |
+| GET | `/knowledgeDrop/document/read` | Token, `documentName` | Looks up the client's non-deleted document with that name. Returns the stored file itself as the raw response body (a Spring `ResponseEntity<InputStreamResource>`, streamed from storage), not a JSON object. The `Content-Type` header is the document's stored MIME type and `Content-Length` is its size in bytes. Before streaming, recomputes the stored file's SHA-1 and returns HTTP 500 if it does not match the hash recorded at upload. Returns HTTP 404 (JSON error body) if there is none (including if it was deleted), or HTTP 400 if `documentName` is missing or blank. Use `document/list` to get a document's ID, type, upload time, and status. |
+| DELETE | `/knowledgeDrop/document/delete` | Token, `documentName` | Soft-deletes the client's non-deleted document with that name by setting `deleted_at` on its record, then asks `IngestionService.deleteChunks` to remove its Elasticsearch chunk entries and embeddings so it no longer appears in search. The stored file is kept, and the name can be reused by a later `create`. Returns HTTP 200 with a confirmation message, HTTP 404 if there is none, or HTTP 400 if `documentName` is missing or blank. |
+| GET | `/knowledgeDrop/document/list` | Token, optional `status`, `limit`, `offset` (query parameters) | Returns a JSON array of the client's non-deleted documents, newest upload first. Each entry has `documentId`, `filename`, `type`, `uploadTime`, and `status`. `status` filters by `processing`, `ready`, `failed`, or `all` (case-insensitive; omitted, blank, or `all` returns every status); any other value returns HTTP 400. `limit` is the page size and `offset` is the number of documents to skip. A missing, zero, or negative `limit` defaults to 1000, and a missing or negative `offset` is treated as 0. Returns an empty list if there are none. |
 
 ### Question Answering and Similarity
 
@@ -236,6 +236,11 @@ curl -s -X POST localhost:8080/knowledgeDrop/client/register \
 TOKEN=<clientToken>
 curl -s localhost:8080/knowledgeDrop/document/list -H "Authorization: Bearer $TOKEN"
 
+# list: filter by status and paginate (the 2nd page of 10 ready documents)
+curl -s -G localhost:8080/knowledgeDrop/document/list -H "Authorization: Bearer $TOKEN" \
+  --data-urlencode 'status=ready' --data-urlencode 'limit=10' --data-urlencode 'offset=10'
+# => [{"documentId":"...","filename":"policy.pdf","type":"application/pdf","uploadTime":"...","status":"ready"}]
+
 # create: a single file part; the document name is the file's name (policy.pdf)
 curl -s -X POST localhost:8080/knowledgeDrop/document/create -H "Authorization: Bearer $TOKEN" \
   -F 'file=@policy.pdf;type=application/pdf'
@@ -245,7 +250,7 @@ curl -s -G localhost:8080/knowledgeDrop/document/read -H "Authorization: Bearer 
   --data-urlencode 'documentName=policy.pdf' -o policy-downloaded.pdf
 ```
 
-`create` uses `multipart/form-data` with a binary `file` part. The document name is the file's original filename, and the MIME type is the file's content type (the filename extension is used if the client sends `application/octet-stream`). Uploading again with the same filename soft-deletes the earlier document and creates a new one with a new document ID.
+`create` uses `multipart/form-data` with a binary `file` part. The document name is the file's original filename, and the MIME type is the file's content type as sent by the client. Original files are stored at `{storageDir}/{clientId}/{fileName}` (default `./data/files`). Uploading again with the same filename soft-deletes the earlier document and creates a new one with a new document ID.
 
 ### Implementation status
 
@@ -254,11 +259,11 @@ Endpoint logic that is not built yet is marked with a `TODO:` comment that names
 | Endpoint | Status | Implement in |
 |---|---|---|
 | `POST registerClient` | **Built** (reference implementation) | `ClientService.register` |
-| `POST document/create` (a same-name upload soft-deletes the old document and creates a new one) | To do | `DocumentService.create` |
-| `GET document/read` | To do | `DocumentService.read` |
-| `DELETE document/delete` | To do | `DocumentService.delete` |
-| `GET document/list` | To do | `DocumentService.list` |
-| `DELETE client/delete` | **Built** | `ClientService.delete` |
+| `POST document/create` (a same-name upload soft-deletes the old document and creates a new one) | **Built**; the ingestion pipeline and `IngestionService.deleteChunks`, which it calls to remove a replaced document's chunks, are still stubs | `DocumentService.create` |
+| `GET document/read` | **Built** | `DocumentService.read` |
+| `DELETE document/delete` | **Built** (soft-delete); the chunk removal it calls, `IngestionService.deleteChunks`, is still a stub | `DocumentService.delete` |
+| `GET document/list` | **Built** | `DocumentService.list` |
+| `DELETE clientDrop` | To do | `ClientService.drop` |
 | `GET health` | To do | `HealthService.check` |
 | Ingestion pipeline (extract, chunk, keyword index) | To do | `IngestionService` |
 | `POST ask` | **DEFERRED** (LLM + embeddings) | `AskService.ask` |

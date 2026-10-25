@@ -34,12 +34,14 @@ public class IngestionService {
   }
 
   /**
-   * Removes a document's chunks and embeddings from Elasticsearch.
+   * Removes a document's chunks and embeddings from Elasticsearch. Called by
+   * {@link DocumentService#delete} after it soft-deletes the document, and by
+   * {@link DocumentService#create} after a same-name upload replaces a document.
    *
    * @param documentId the document whose chunks should be deleted
    */
   public void deleteChunks(UUID documentId) {
-    // TODO: create (replacing a document), delete: delete all chunk embeddings
+    // TODO: delete, create (replacing a document): delete all chunk embeddings
     //   (vector store) and chunk entries (keyword index) in Elasticsearch belonging to
     //   documentId.
     throw ApiException.notImplemented("chunk deletion");

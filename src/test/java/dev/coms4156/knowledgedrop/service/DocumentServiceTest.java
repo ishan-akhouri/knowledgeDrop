@@ -19,6 +19,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import dev.coms4156.knowledgedrop.api.dto.DocumentStatusResponse;
+import dev.coms4156.knowledgedrop.api.dto.DocumentSummary;
+import dev.coms4156.knowledgedrop.api.dto.MessageResponse;
 import dev.coms4156.knowledgedrop.api.dto.ReadDocument;
 import dev.coms4156.knowledgedrop.config.KnowledgeDropProperties;
 import dev.coms4156.knowledgedrop.exception.ApiException;
@@ -35,6 +37,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -49,6 +52,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -731,22 +737,71 @@ class DocumentServiceTest {
   }
 
   // ---------------------------------------------------------------------------------------------
-  // delete / list: still TODO, so they must fail clearly with 501
+  // delete
   // ---------------------------------------------------------------------------------------------
 
   @Test
-  void delete_notImplementedYet_throwsNotImplemented() {
-    ApiException ex =
-        assertThrows(ApiException.class, () -> documentService.delete(client, "notes.txt"));
+  void delete_existingDocument_softDeletesAndRemovesItsIndexedChunks() {
+    DocumentRecord record = storedRecord("notes.txt", 5L, HELLO_SHA1);
+    stubExisting(record);
+    when(documentRepository.save(any(DocumentRecord.class))).thenReturn(record);
 
-    assertEquals(HttpStatus.NOT_IMPLEMENTED, ex.getStatus());
+    MessageResponse response = documentService.delete(client, "notes.txt");
+
+    assertEquals("Document 'notes.txt' has been deleted", response.message());
+    verify(ingestionService).deleteChunks(record.getId());
   }
 
   @Test
-  void list_notImplementedYet_throwsNotImplemented() {
-    ApiException ex =
-        assertThrows(ApiException.class, () -> documentService.list(client, null, null, null));
+  void delete_documentNotFound_throwsNotFoundWithoutRemovingChunks() {
+    when(documentRepository.findByOwnerIdAndNameAndDeletedAtIsNull(clientId, "notes.txt"))
+        .thenReturn(Optional.empty());
 
-    assertEquals(HttpStatus.NOT_IMPLEMENTED, ex.getStatus());
+    ApiException ex =
+        assertThrows(ApiException.class, () -> documentService.delete(client, "notes.txt"));
+
+    assertEquals(HttpStatus.NOT_FOUND, ex.getStatus());
+    assertEquals("Document not found or has been deleted", ex.getMessage());
+    verify(ingestionService, never()).deleteChunks(any(UUID.class));
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // list
+  // ---------------------------------------------------------------------------------------------
+
+  @Test
+  void list_statusFilter_mapsDocumentSummariesNewestFirst() {
+    DocumentRecord record = storedRecord("notes.txt", 5L, HELLO_SHA1);
+    ReflectionTestUtils.setField(record, "status", DocumentStatus.READY);
+    when(documentRepository.findByOwnerIdAndStatusAndDeletedAtIsNull(
+            eq(clientId), eq(DocumentStatus.READY), any(Pageable.class)))
+        .thenReturn(new PageImpl<>(List.of(record)));
+
+    List<DocumentSummary> result = documentService.list(client, " READY ", null, null);
+
+    assertEquals(1, result.size());
+    assertEquals(record.getId(), result.get(0).documentId());
+    assertEquals("notes.txt", result.get(0).filename());
+    assertEquals("text/plain", result.get(0).type());
+    assertEquals(DocumentStatus.READY, result.get(0).status());
+    ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
+    verify(documentRepository)
+        .findByOwnerIdAndStatusAndDeletedAtIsNull(
+            eq(clientId), eq(DocumentStatus.READY), pageable.capture());
+    assertEquals(
+        Sort.Direction.DESC,
+        pageable.getValue().getSort().getOrderFor("uploadedAt").getDirection());
+  }
+
+  @Test
+  void list_unknownStatus_throwsBadRequestWithoutQueryingRepository() {
+    ApiException ex =
+        assertThrows(
+            ApiException.class, () -> documentService.list(client, "archived", null, null));
+
+    assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
+    assertEquals(
+        "Unknown status 'archived'; expected one of: processing, ready, failed", ex.getMessage());
+    verifyNoInteractions(documentRepository);
   }
 }
