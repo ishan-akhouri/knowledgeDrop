@@ -50,6 +50,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.invocation.InvocationOnMock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockMultipartFile;
@@ -100,17 +101,22 @@ class DocumentServiceCreateEdgeCasesTest {
     return record;
   }
 
-  /** Makes the mocked repository assign an ID to any record that does not have one yet. */
+  /** Makes the mocked repository's save assign an ID to any record that does not have one yet. */
   private void saveAssignsIds() {
-    when(documentRepository.save(any(DocumentRecord.class)))
-        .thenAnswer(
-            invocation -> {
-              DocumentRecord record = invocation.getArgument(0);
-              if (record.getId() == null) {
-                ReflectionTestUtils.setField(record, "id", UUID.randomUUID());
-              }
-              return record;
-            });
+    when(documentRepository.save(any(DocumentRecord.class))).thenAnswer(this::assignId);
+  }
+
+  /** Same as {@link #saveAssignsIds()}, for the saveAndFlush calls made when replacing. */
+  private void saveAndFlushAssignsIds() {
+    when(documentRepository.saveAndFlush(any(DocumentRecord.class))).thenAnswer(this::assignId);
+  }
+
+  private DocumentRecord assignId(InvocationOnMock invocation) {
+    DocumentRecord record = invocation.getArgument(0);
+    if (record.getId() == null) {
+      ReflectionTestUtils.setField(record, "id", UUID.randomUUID());
+    }
+    return record;
   }
 
   private static MockMultipartFile textFile(String name, String content) {
@@ -454,7 +460,7 @@ class DocumentServiceCreateEdgeCasesTest {
 
   @Test
   void create_replacingDocument_ingestsOnlyTheNewDocument() {
-    saveAssignsIds();
+    saveAndFlushAssignsIds();
     DocumentRecord existing = existingRecord("notes.txt");
 
     DocumentStatusResponse response = documentService.create(client, textFile("notes.txt", "hi"));
@@ -511,6 +517,7 @@ class DocumentServiceCreateEdgeCasesTest {
   @Test
   void create_sameNameTwice_secondUploadSoftDeletesTheFirst() {
     saveAssignsIds();
+    saveAndFlushAssignsIds();
     DocumentStatusResponse firstResponse =
         documentService.create(client, textFile("notes.txt", "first"));
     DocumentRecord first = savedRecord();
@@ -522,14 +529,15 @@ class DocumentServiceCreateEdgeCasesTest {
 
     assertNotNull(first.getDeletedAt());
     assertNotEquals(firstResponse.documentId(), secondResponse.documentId());
-    verify(documentRepository, times(3)).save(any(DocumentRecord.class));
+    verify(documentRepository, times(1)).save(any(DocumentRecord.class));
+    verify(documentRepository, times(2)).saveAndFlush(any(DocumentRecord.class));
     verify(ingestionService).ingest(firstResponse.documentId());
     verify(ingestionService).ingest(secondResponse.documentId());
   }
 
   @Test
   void create_replacingDocument_marksTheOldRecordDeletedAtUploadTime() {
-    saveAssignsIds();
+    saveAndFlushAssignsIds();
     DocumentRecord existing = existingRecord("notes.txt");
     Instant before = Instant.now();
 
@@ -542,7 +550,7 @@ class DocumentServiceCreateEdgeCasesTest {
 
   @Test
   void create_replacingDocument_replacementDescribesTheNewUploadNotTheOldOne() {
-    saveAssignsIds();
+    saveAndFlushAssignsIds();
     DocumentRecord existing = existingRecord("notes.txt");
 
     documentService.create(client, textFile("notes.txt", "hello"));
@@ -551,7 +559,7 @@ class DocumentServiceCreateEdgeCasesTest {
     assertEquals(3L, existing.getFileBytes());
     assertEquals(EMPTY_SHA1, existing.getContentHash());
     ArgumentCaptor<DocumentRecord> captor = ArgumentCaptor.forClass(DocumentRecord.class);
-    verify(documentRepository, times(2)).save(captor.capture());
+    verify(documentRepository, times(2)).saveAndFlush(captor.capture());
     DocumentRecord replacement = captor.getAllValues().get(1);
     assertEquals("text/plain", replacement.getType());
     assertEquals(5L, replacement.getFileBytes());
@@ -563,7 +571,7 @@ class DocumentServiceCreateEdgeCasesTest {
   @Test
   void create_replacingDocument_oldRecordSaveFails_neverSavesNewRecordAndRollsBack() {
     existingRecord("notes.txt");
-    when(documentRepository.save(any(DocumentRecord.class)))
+    when(documentRepository.saveAndFlush(any(DocumentRecord.class)))
         .thenThrow(new IllegalStateException("db down"));
     MockMultipartFile file = textFile("notes.txt", "hello");
 
@@ -571,7 +579,8 @@ class DocumentServiceCreateEdgeCasesTest {
 
     assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatus());
     assertTrue(ex.getMessage().contains("db down"));
-    verify(documentRepository, times(1)).save(any(DocumentRecord.class));
+    verify(documentRepository, times(1)).saveAndFlush(any(DocumentRecord.class));
+    verify(documentRepository, never()).save(any(DocumentRecord.class));
     verify(transactionManager).rollback(any());
     verify(transactionManager, never()).commit(any());
     verifyNoInteractions(ingestionService);
@@ -588,12 +597,13 @@ class DocumentServiceCreateEdgeCasesTest {
 
     assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatus());
     verify(documentRepository, never()).save(any(DocumentRecord.class));
+    verify(documentRepository, never()).saveAndFlush(any(DocumentRecord.class));
     verifyNoInteractions(ingestionService);
   }
 
   @Test
   void create_replacingDocument_commitFails_throwsInternalServerErrorAndSkipsIngestion() {
-    saveAssignsIds();
+    saveAndFlushAssignsIds();
     existingRecord("notes.txt");
     doThrow(new TransactionSystemException("commit failed")).when(transactionManager).commit(any());
     MockMultipartFile file = textFile("notes.txt", "hello");
@@ -602,7 +612,7 @@ class DocumentServiceCreateEdgeCasesTest {
 
     assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, ex.getStatus());
     assertTrue(ex.getMessage().contains("commit failed"));
-    verify(documentRepository, times(2)).save(any(DocumentRecord.class));
+    verify(documentRepository, times(2)).saveAndFlush(any(DocumentRecord.class));
     verifyNoInteractions(ingestionService);
   }
 }

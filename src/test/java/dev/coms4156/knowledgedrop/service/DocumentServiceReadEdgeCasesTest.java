@@ -46,6 +46,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.invocation.InvocationOnMock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockMultipartFile;
@@ -129,20 +130,30 @@ class DocumentServiceReadEdgeCasesTest {
   }
 
   private void saveAssignsIds() {
-    when(documentRepository.save(any(DocumentRecord.class)))
-        .thenAnswer(
-            invocation -> {
-              DocumentRecord record = invocation.getArgument(0);
-              if (record.getId() == null) {
-                ReflectionTestUtils.setField(record, "id", UUID.randomUUID());
-              }
-              return record;
-            });
+    when(documentRepository.save(any(DocumentRecord.class))).thenAnswer(this::assignId);
+  }
+
+  private void saveAndFlushAssignsIds() {
+    when(documentRepository.saveAndFlush(any(DocumentRecord.class))).thenAnswer(this::assignId);
+  }
+
+  private DocumentRecord assignId(InvocationOnMock invocation) {
+    DocumentRecord record = invocation.getArgument(0);
+    if (record.getId() == null) {
+      ReflectionTestUtils.setField(record, "id", UUID.randomUUID());
+    }
+    return record;
   }
 
   private DocumentRecord lastSavedRecord(int expectedSaves) {
     ArgumentCaptor<DocumentRecord> captor = ArgumentCaptor.forClass(DocumentRecord.class);
     verify(documentRepository, times(expectedSaves)).save(captor.capture());
+    return captor.getValue();
+  }
+
+  private DocumentRecord lastSavedAndFlushedRecord(int expectedSaves) {
+    ArgumentCaptor<DocumentRecord> captor = ArgumentCaptor.forClass(DocumentRecord.class);
+    verify(documentRepository, times(expectedSaves)).saveAndFlush(captor.capture());
     return captor.getValue();
   }
 
@@ -391,6 +402,7 @@ class DocumentServiceReadEdgeCasesTest {
   void createReplaceRead_realStorage_returnsTheLatestUpload(@TempDir Path dataDir)
       throws Exception {
     saveAssignsIds();
+    saveAndFlushAssignsIds();
     DocumentService service = serviceWithRealStorage(dataDir);
     service.create(client, new MockMultipartFile("file", "notes.txt", "text/plain", HELLO_BYTES));
     DocumentRecord first = lastSavedRecord(1);
@@ -400,7 +412,7 @@ class DocumentServiceReadEdgeCasesTest {
         client,
         new MockMultipartFile(
             "file", "notes.txt", "text/plain", "second".getBytes(StandardCharsets.UTF_8)));
-    DocumentRecord second = lastSavedRecord(3);
+    DocumentRecord second = lastSavedAndFlushedRecord(2);
     when(documentRepository.findByOwnerIdAndNameAndDeletedAtIsNull(clientId, "notes.txt"))
         .thenReturn(Optional.of(second));
 
