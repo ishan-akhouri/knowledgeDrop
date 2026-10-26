@@ -1,6 +1,110 @@
 # KnowledgeDrop
 
-KnowledgeDrop is a REST API that works like a drop box for knowledge. Client programs upload documents (PDF, text, images), and the service indexes them for semantic and keyword retrieval. It answers questions grounded in the stored documents with citations, summarizes documents, and finds similar documents. It also includes built-in tooling to compare and evaluate retrieval strategies.
+KnowledgeDrop is a REST API that works like a drop box for knowledge. The proposed service lets client programs upload documents (PDF, text, images), indexes them for semantic and keyword retrieval, answers questions with citations, summarizes documents, and finds similar documents. It also includes proposed tooling to compare and evaluate retrieval strategies. The first iteration implements the subset described below.
+
+## AI Disclosure
+
+#### Models used
+- Codex (OpenAI)
+
+#### AI contributions
+Our team used various AI models throughout development to assist with creating the initial project structure, implementing features, debugging code, reviewing changes, generating and refining tests, and improving code readability. AI also supported documentation, including API descriptions, architecture and database diagrams, README updates, setup instructions, and explanations of implemented functionality and known limitations.
+Prompts generally involved translating requirements into code, explaining implementation choices, investigating errors, suggesting fixes, identifying edge cases, generating tests, and revising documentation to match the project’s behavior. Specific prompt histories and token usage totals were not recorded in this disclosure.
+
+## Project Management
+
+[Jira task log — KnowledgeDrop](https://ishancolumbiacs.atlassian.net/jira/software/projects/KD/list?jql=project%20%3D%20KD%20ORDER%20BY%20cf%5B10019%5D%20ASC)
+
+We organize development in Jira around the six initiatives listed below. The counts include tasks and stories from the October 25, 2026 issue snapshot; they describe planned work, not release completion.
+
+| Epic | Related tasks/stories | Initiative |
+|---|---:|---|
+| **Project Setup (D-2)** | 3 | Establish quality gates, configuration management for secrets and providers, and GitHub Actions CI. |
+| **Document Management (KD-11)** | 5 | Build document creation, reading, listing, deletion, and the supporting metadata model. |
+| **RAG/Retrieval (KD-14)** | 11 | Develop ingestion, keyword and vector search, hybrid ranking, retrieval orchestration, and embedding/LLM integrations. |
+| **Evaluation (KD-24)** | 4 | Compare retrieval strategies using recall@k and MRR, labeled questions, sample documents, and a results write-up. |
+| **Client Management (KD-33)** | 2 | Implement client registration and client deletion. |
+| **Miscellaneous (KD-40)** | 1 | Add application logging. |
+
+One additional task covers selecting embedding/LLM providers (KD-8), bringing the total to **27 tasks/stories across the listed initiatives and standalone work**. Individual assignments and progress are tracked in the linked Jira task log.
+
+## First Iteration MVP
+
+This iteration focuses on authenticated file storage and document metadata management. Retrieval and AI features are deferred; the architecture and broader API reference describe the intended service, while this section and the implementation-status table identify what is available now.
+
+### Implemented scope
+
+All paths below are relative to `/knowledgeDrop`.
+
+| Endpoint | Available behavior |
+|---|---|
+| `POST /client/register` | Registers a client and returns its ID and bearer token. |
+| `DELETE /client/delete` | Soft-deletes the authenticated client and its document records; subsequent requests with that token return HTTP 401. Files and Elasticsearch data are retained. |
+| `POST /document/create` | For a new filename, stores the original file and its metadata and returns HTTP 202 with status `processing`. Text extraction and indexing are not implemented. |
+| `GET /document/read` | Returns the caller's stored original file by name, checking its content hash before streaming. Does not require ingestion to finish. |
+| `GET /document/list` | Lists the caller's non-deleted document metadata, with status filtering and pagination. |
+
+Protected endpoints require the token returned by registration. Register first, upload a file with a new name, then read or list it. Delete the client only after completing other calls with its token.
+
+### Deferred features and known limitations
+
+- **Ingestion is deferred.** The asynchronous ingestion method currently throws a not-implemented error, which is logged after a new-name upload. The file remains readable, but its record stays `processing`; it does not become `ready` or searchable.
+- **Document deletion and same-name replacement are incomplete and excluded from the demonstrated MVP.** Both call the unimplemented `deleteChunks` method and return HTTP 501 after database changes have committed. Deletion leaves the document soft-deleted; replacement overwrites the stored file and creates a new record but does not start its ingestion. Do not treat the error as evidence that no changes occurred.
+- **Question answering, similarity, comparison, evaluation, summarization, and health checks are deferred.** Their endpoint implementations currently return HTTP 501. Keyword indexing and RRF have component implementations and tests, but are not connected into a working upload-to-search API workflow.
+
+### Demonstrating the implemented workflow
+
+Follow **Local Development** below to start the dependencies and application. These commands use a fresh client so the filename is new. Copy `clientToken` and `clientId` from the registration response into the indicated variables.
+
+```bash
+BASE=http://localhost:8080/knowledgeDrop
+curl -i -X POST "$BASE/client/register" \
+  -H 'Content-Type: application/json' -d '{"name":"iteration-one-demo"}'
+# Expected: 201, with clientId and clientToken.
+
+TOKEN='paste-clientToken-here'
+CLIENT_ID='paste-clientId-here'
+printf 'First iteration document.\n' > /tmp/knowledgedrop-demo.txt
+curl -i -X POST "$BASE/document/create" \
+  -H "Authorization: Bearer $TOKEN" \
+  -F 'file=@/tmp/knowledgedrop-demo.txt;type=text/plain'
+# Expected: 202, with documentId and status processing (ingestion is deferred).
+
+curl -i "$BASE/document/list" -H "Authorization: Bearer $TOKEN"
+# Expected: 200, with the uploaded document's metadata.
+
+curl -i -G "$BASE/document/read" -H "Authorization: Bearer $TOKEN" \
+  --data-urlencode 'documentName=knowledgedrop-demo.txt'
+# Expected: 200, with the original text as the response body.
+
+# Bad usage: protected request without a token.
+curl -i "$BASE/document/list"
+# Expected: 401.
+
+# Bad usage: read a filename that this client has not uploaded.
+curl -i -G "$BASE/document/read" -H "Authorization: Bearer $TOKEN" \
+  --data-urlencode 'documentName=missing.txt'
+# Expected: 404, with a JSON error and reason.
+
+curl -i -X DELETE "$BASE/client/delete" \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d "{\"clientId\":\"$CLIENT_ID\"}"
+# Expected: 200; client and document records are soft-deleted.
+
+curl -i "$BASE/document/list" -H "Authorization: Bearer $TOKEN"
+# Expected: 401 because the client has been deleted.
+```
+
+### Style Report
+
+We use Checkstyle with Google Java Style (`google_checks.xml`), configured in `pom.xml`, to check application and test code.
+
+Run: `./mvnw checkstyle:check`
+
+![Checkstyle: 80 files checked, zero violations](reports/style/style-report-20261025.png)
+
+[Full Checkstyle XML report](reports/style/checkstyle-result.xml)
+— zero violations.
 
 ## Why Hybrid Retrieval
 
@@ -109,7 +213,7 @@ erDiagram
 
 ## API Reference
 
-All paths are under `/knowledgeDrop`. Document management endpoints are grouped under the `/knowledgeDrop/document` prefix (for example `POST /knowledgeDrop/document/create`).
+All paths are under `/knowledgeDrop`. Document management endpoints are grouped under the `/knowledgeDrop/document` prefix (for example `POST /knowledgeDrop/document/create`). This reference includes intended behavior for unfinished features; consult **First Iteration MVP** above for current availability, particularly the incomplete deletion, replacement, and ingestion paths.
 
 ### Client Registration
 
@@ -258,12 +362,12 @@ Endpoint logic that is not built yet is marked with a `TODO:` comment that names
 
 | Endpoint | Status | Implement in |
 |---|---|---|
-| `POST registerClient` | **Built** (reference implementation) | `ClientService.register` |
-| `POST document/create` (a same-name upload soft-deletes the old document and creates a new one) | **Built**; the ingestion pipeline and `IngestionService.deleteChunks`, which it calls to remove a replaced document's chunks, are still stubs | `DocumentService.create` |
+| `POST client/register` | **Built** | `ClientService.register` |
+| `POST document/create` | **Partial**: new-name file storage and metadata creation work; ingestion is deferred. Same-name replacement changes state but returns 501 because chunk deletion is a stub | `DocumentService.create` |
 | `GET document/read` | **Built** | `DocumentService.read` |
-| `DELETE document/delete` | **Built** (soft-delete); the chunk removal it calls, `IngestionService.deleteChunks`, is still a stub | `DocumentService.delete` |
+| `DELETE document/delete` | **Incomplete**: soft-deletes the record, then returns 501 because chunk deletion is a stub | `DocumentService.delete` |
 | `GET document/list` | **Built** | `DocumentService.list` |
-| `DELETE clientDrop` | To do | `ClientService.drop` |
+| `DELETE client/delete` | **Built** (client and document record soft-deletion; stored files and index data retained) | `ClientService.delete` |
 | `GET health` | To do | `HealthService.check` |
 | Ingestion pipeline (extract, chunk, keyword index) | To do | `IngestionService` |
 | `POST ask` | **DEFERRED** (LLM + embeddings) | `AskService.ask` |
@@ -271,7 +375,8 @@ Endpoint logic that is not built yet is marked with a `TODO:` comment that names
 | `POST compare` | **DEFERRED** (embeddings) | `SearchService.compare` |
 | `POST eval` | **DEFERRED** (embeddings) | `SearchService.eval` |
 | `POST summarize` | **DEFERRED** (LLM) | `SummarizationService.summarize` |
-| Chunk embeddings in Elasticsearch, RRF | **DEFERRED** | `IngestionService`, `retrieval/` package |
+| Keyword index and RRF | **Built as components**, with tests; end-to-end ingestion/retrieval wiring is deferred | `ElasticsearchKeywordIndex`, `RrfMerger` |
+| Chunk embeddings and vector/hybrid retrieval | **DEFERRED** | `IngestionService`, `retrieval/` package |
 
 ### Code layout
 
