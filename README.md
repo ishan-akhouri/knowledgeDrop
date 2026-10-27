@@ -6,6 +6,10 @@ KnowledgeDrop is a REST API that works like a drop box for knowledge. The propos
 
 #### Models used
 - Codex (OpenAI)
+- Claude (Anthropic)
+
+### Token usage
+- Estimated token usage: 40m per person (monthly plan)
 
 #### AI contributions
 Our team used various AI models throughout development to assist with creating the initial project structure, implementing features, debugging code, reviewing changes, generating and refining tests, and improving code readability. AI also supported documentation, including API descriptions, architecture and database diagrams, README updates, setup instructions, and explanations of implemented functionality and known limitations.
