@@ -51,8 +51,12 @@ public class RetrievalService {
    * @return top k chunks by embedding similarity
    */
   public List<RankedChunk> vector(UUID clientId, String query, int k) {
-    // TODO: retrieval: embed the query, call vectorStore.search with the candidate pool, cut to k.
-    throw new UnsupportedOperationException("vector search");
+    if (k <= 0 || query == null || query.isBlank()) {
+      return List.of();
+    }
+    // Vector-only mode needs just the top k, so ask for k directly. Hybrid mode will use the
+    // larger candidate pool.
+    return vectorStore.search(clientId, embeddings.embed(query), k);
   }
 
   /**
