@@ -58,7 +58,8 @@ class GeminiLlmClientTest {
   @Test
   void complete_joinsMultipleTextParts() {
     String body =
-        "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hel\"},{\"text\":\"lo\"}]}}]}";
+        "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hel\"},{\"text\":\"lo\"}]},"
+            + "\"finishReason\":\"STOP\"}]}";
     server.expect(requestTo(URL)).andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
 
     assertThat(client.complete("s", "u")).isEqualTo("Hello");
@@ -184,6 +185,57 @@ class GeminiLlmClientTest {
             ApiException.class, e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.BAD_GATEWAY))
         .hasMessageContaining("blocked")
         .hasMessageContaining("SAFETY");
+  }
+
+  @Test
+  void complete_truncatedAnswerWithText_isBadGatewayNotPartial() {
+    String body =
+        "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"The answer starts\"}]},"
+            + "\"finishReason\":\"MAX_TOKENS\"}]}";
+    server.expect(requestTo(URL)).andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+
+    assertThatThrownBy(() -> client.complete("s", "u"))
+        .isInstanceOfSatisfying(
+            ApiException.class, e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.BAD_GATEWAY))
+        .hasMessageContaining("MAX_TOKENS")
+        .hasMessageContaining("incomplete");
+  }
+
+  @Test
+  void complete_stoppedForSafetyWithPartialText_isBadGateway() {
+    String body =
+        "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Partial\"}]},"
+            + "\"finishReason\":\"SAFETY\"}]}";
+    server.expect(requestTo(URL)).andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+
+    assertThatThrownBy(() -> client.complete("s", "u"))
+        .isInstanceOfSatisfying(
+            ApiException.class, e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.BAD_GATEWAY))
+        .hasMessageContaining("SAFETY");
+  }
+
+  @Test
+  void complete_missingFinishReason_isBadGateway() {
+    String body = "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello\"}]}}]}";
+    server.expect(requestTo(URL)).andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+
+    assertThatThrownBy(() -> client.complete("s", "u"))
+        .isInstanceOfSatisfying(
+            ApiException.class, e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.BAD_GATEWAY))
+        .hasMessageContaining("missing");
+  }
+
+  @Test
+  void complete_stopWithBlankText_isBadGateway() {
+    String body =
+        "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"  \"}]},"
+            + "\"finishReason\":\"STOP\"}]}";
+    server.expect(requestTo(URL)).andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+
+    assertThatThrownBy(() -> client.complete("s", "u"))
+        .isInstanceOfSatisfying(
+            ApiException.class, e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.BAD_GATEWAY))
+        .hasMessageContaining("no text");
   }
 
   @Test

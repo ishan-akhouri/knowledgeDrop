@@ -25,7 +25,9 @@ import org.springframework.web.client.RestClientResponseException;
  *
  * <p>Every failure surfaces as an {@link ApiException}: 503 when the client is not configured, 502
  * for anything that goes wrong talking to Gemini (HTTP errors, timeouts, empty or blocked
- * answers). A 429 or 503 from Gemini is retried once after a short pause.
+ * answers, and answers that did not finish, such as {@code MAX_TOKENS}, so a cut-off answer is
+ * never returned as if it were complete). A 429 or 503 from Gemini is retried once after a short
+ * pause.
  */
 @Component
 public class GeminiLlmClient implements LlmClient {
@@ -35,6 +37,7 @@ public class GeminiLlmClient implements LlmClient {
 
   private static final Logger LOG = LoggerFactory.getLogger(GeminiLlmClient.class);
   private static final String API_KEY_HEADER = "x-goog-api-key";
+  private static final String FINISH_STOP = "STOP";
   private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
   private static final Duration READ_TIMEOUT = Duration.ofSeconds(60);
   private static final Duration RETRY_BACKOFF = Duration.ofSeconds(2);
@@ -167,9 +170,16 @@ public class GeminiLlmClient implements LlmClient {
       throw badGateway("Gemini blocked the prompt (" + reason + ")");
     }
     Candidate first = candidates.get(0);
+    // Only STOP means the model finished. MAX_TOKENS, SAFETY, RECITATION and the rest come with
+    // HTTP 200 and possibly partial text, and a missing reason means it has not stopped.
+    if (!FINISH_STOP.equals(first.finishReason())) {
+      String reason = first.finishReason() == null ? "missing" : first.finishReason();
+      throw badGateway(
+          "Gemini did not finish the answer (finish reason: " + reason + "), it may be incomplete");
+    }
     String text = joinText(first.content());
     if (text.isBlank()) {
-      throw badGateway("Gemini returned no text (finish reason: " + first.finishReason() + ")");
+      throw badGateway("Gemini returned no text");
     }
     return text;
   }
