@@ -254,7 +254,7 @@ curl -s -G localhost:8080/knowledgeDrop/document/read -H "Authorization: Bearer 
 
 ### Implementation status
 
-Endpoint logic that is not built yet is marked with a `TODO:` comment that names the endpoint (for example `TODO: create: ...`) and returns `501 Not Implemented`. The AI-dependent items are marked **DEFERRED**: the providers are chosen (see Tech Stack), but the embedding service and the Gemini client are not built yet. Find every open item with `grep -rn "TODO:" src/main`. Matching disabled tests live in `EndpointTodoTests`; move each into a real test class as you build the endpoint.
+Endpoint logic that is not built yet is marked with a `TODO:` comment that names the endpoint (for example `TODO: create: ...`) and returns `501 Not Implemented`. The AI-dependent items are marked **DEFERRED**: the providers are chosen (see Tech Stack), and the Gemini client exists, but the embedding service and the endpoints that use them are not built yet. Find every open item with `grep -rn "TODO:" src/main`. Matching disabled tests live in `EndpointTodoTests`; move each into a real test class as you build the endpoint.
 
 | Endpoint | Status | Implement in |
 |---|---|---|
@@ -322,6 +322,22 @@ Coverage is a ratchet. The minimum starts at the current baseline and is raised 
 - Spring Boot 4.1 on Java 17; package `dev.coms4156.knowledgedrop`.
 - Records (clients, documents) in PostgreSQL via JPA; `ddl-auto: update` for dev, so add Flyway (or similar) migrations before a real deployment. Original uploads go under `./data/files`.
 - 501 stubs return the normal JSON error body so the API contract is testable before the logic.
+
+## LLM client
+
+`GeminiLlmClient` calls Gemini Flash (free tier) through the Gemini REST API. Put `LLM_API_KEY` and
+`LLM_MODEL` in `.env`; the key is sent in a header and never logged. Without a key, LLM calls fail
+with HTTP 503. Provider errors, timeouts and rate limits return HTTP 502 (one retry on 429 and 503).
+
+The free tier may use prompts to improve Google products, so do not send sensitive documents
+through `ask` or `summarize`.
+
+One test calls the real API and runs only when the key is in your shell environment:
+
+```bash
+set -a; . ./.env; set +a
+./mvnw -Dtest=GeminiLlmClientLiveTest test
+```
 
 ## Team
 
