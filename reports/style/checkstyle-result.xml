@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<checkstyle version="12.3.1">
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/repository/ClientRepository.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/repository/DocumentRepository.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/config/AsyncConfig.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/config/KnowledgeDropProperties.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/config/WebConfig.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/security/AuthInterceptor.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/security/TokenUtils.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/KnowledgeDropApplication.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/storage/FileStorage.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/retrieval/RetrievalService.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/retrieval/ElasticsearchKeywordIndex.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/retrieval/VectorStore.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/retrieval/KeywordIndex.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/retrieval/EmbeddingClient.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/retrieval/LlmClient.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/retrieval/RrfMerger.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/retrieval/RankedChunk.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/model/DocumentStatus.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/model/ClientRecord.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/model/SummaryLength.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/model/DocumentRecord.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/dto/ModeMetrics.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/dto/AskRequest.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/dto/SummarizeResponse.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/dto/SimilarityResponse.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/dto/EvalRequest.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/dto/RegisterClientResponse.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/dto/DeleteClientRequest.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/dto/DocumentStatusResponse.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/dto/OverlapEntry.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/dto/ScoredChunk.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/dto/SimilarityRequest.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/dto/ReadDocument.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/dto/HealthResponse.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/dto/RegisterClientRequest.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/dto/LabeledQuestion.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/dto/AskResponse.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/dto/QuestionResult.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/dto/EvalResponse.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/dto/SummarizeRequest.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/dto/MessageResponse.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/dto/Citation.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/dto/CompareRequest.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/dto/DocumentSummary.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/dto/SimilarDocument.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/dto/CompareResponse.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/ClientController.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/AskController.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/HealthController.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/DocumentController.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/api/SearchController.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/service/ClientService.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/service/SummarizationService.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/service/AskService.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/service/DocumentService.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/service/HealthService.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/service/SearchService.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/service/IngestionService.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/exception/ApiException.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/exception/GlobalExceptionHandler.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/main/java/dev/coms4156/knowledgedrop/exception/ErrorResponse.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/test/java/dev/coms4156/knowledgedrop/config/KnowledgeDropPropertiesTest.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/test/java/dev/coms4156/knowledgedrop/security/TokenUtilsTest.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/test/java/dev/coms4156/knowledgedrop/retrieval/RrfMergerTest.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/test/java/dev/coms4156/knowledgedrop/retrieval/RetrievalServiceKeywordTest.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/test/java/dev/coms4156/knowledgedrop/retrieval/ElasticsearchKeywordIndexIntegrationTest.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/test/java/dev/coms4156/knowledgedrop/retrieval/ElasticsearchKeywordIndexTest.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/test/java/dev/coms4156/knowledgedrop/KnowledgeDropApplicationTests.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/test/java/dev/coms4156/knowledgedrop/model/DocumentRecordTest.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/test/java/dev/coms4156/knowledgedrop/api/ClientDeletionIntegrationTest.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/test/java/dev/coms4156/knowledgedrop/api/ApiAuthIntegrationTest.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/test/java/dev/coms4156/knowledgedrop/api/DocumentListIntegrationTest.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/test/java/dev/coms4156/knowledgedrop/EndpointTodoTests.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/test/java/dev/coms4156/knowledgedrop/service/ClientServiceTest.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/test/java/dev/coms4156/knowledgedrop/service/DocumentServiceReadEdgeCasesTest.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/test/java/dev/coms4156/knowledgedrop/service/DocumentServicePageableTest.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/test/java/dev/coms4156/knowledgedrop/service/DocumentServiceListTest.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/test/java/dev/coms4156/knowledgedrop/service/DocumentServiceDeleteTest.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/test/java/dev/coms4156/knowledgedrop/service/DocumentServiceCreateEdgeCasesTest.java">
+</file>
+<file name="/Users/psalsbury/Desktop/coms4156_homeworks/knowledgeDrop/src/test/java/dev/coms4156/knowledgedrop/service/DocumentServiceTest.java">
+</file>
+</checkstyle>
