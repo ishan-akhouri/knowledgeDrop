@@ -6,6 +6,7 @@ import co.elastic.clients.elasticsearch._types.Refresh;
 import co.elastic.clients.elasticsearch._types.SortOrder;
 import co.elastic.clients.elasticsearch._types.query_dsl.Query;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
+import co.elastic.clients.elasticsearch.core.DeleteByQueryResponse;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.bulk.BulkOperation;
 import co.elastic.clients.elasticsearch.core.bulk.BulkResponseItem;
@@ -206,9 +207,13 @@ public class ElasticsearchKeywordIndex implements KeywordIndex {
   private void deleteWhere(String field, UUID value) {
     ensureIndex();
     try {
-      client.deleteByQuery(
-          d -> d.index(indexName).query(q -> q.term(t -> t.field(field).value(value.toString())))
-              .refresh(true));
+      DeleteByQueryResponse response =
+          client.deleteByQuery(
+              d ->
+                  d.index(indexName)
+                      .query(q -> q.term(t -> t.field(field).value(value.toString())))
+                      .refresh(true));
+      ElasticsearchDeletes.requireComplete(response);
     } catch (IOException e) {
       throw new UncheckedIOException("Could not delete chunks", e);
     }
