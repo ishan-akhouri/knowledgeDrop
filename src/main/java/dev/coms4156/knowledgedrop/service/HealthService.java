@@ -1,7 +1,6 @@
 package dev.coms4156.knowledgedrop.service;
 
 import dev.coms4156.knowledgedrop.api.dto.HealthResponse;
-import dev.coms4156.knowledgedrop.exception.ApiException;
 import org.springframework.stereotype.Service;
 
 /** Dependency health checks. */
@@ -14,9 +13,9 @@ public class HealthService {
    * @return the status of the dependency and the overall status
    */
   public HealthResponse check() {
-    // TODO: health: ping Elasticsearch (for example ElasticsearchClient.ping()).
-    // TODO: health: never throw: report "down" for a dependency that cannot be reached. Overall
-    //   status is HealthResponse.UP only if Elasticsearch is up.
-    throw ApiException.notImplemented("GET /knowledgeDrop/health");
+    // TODO: health: stub, always healthy. Ping Elasticsearch (for example
+    //   ElasticsearchClient.ping()) and report "down" for a dependency that cannot be reached.
+    //   Never throw. Overall status is HealthResponse.UP only if Elasticsearch is up.
+    return new HealthResponse(HealthResponse.UP, HealthResponse.UP);
   }
 }

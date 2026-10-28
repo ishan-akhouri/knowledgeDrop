@@ -183,6 +183,11 @@ class ApiAuthIntegrationTest {
         .andExpect(result -> assertNotEquals(401, result.getResponse().getStatus()));
   }
 
+  @Test
+  void rootHealth_requiresNoToken_returns200() throws Exception {
+    mockMvc.perform(get("/health")).andExpect(status().isOk());
+  }
+
   // ------------------------------------------------------------ request validation
 
   @Test

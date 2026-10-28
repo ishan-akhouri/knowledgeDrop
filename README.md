@@ -1,6 +1,141 @@
 # KnowledgeDrop
 
-KnowledgeDrop is a REST API that works like a drop box for knowledge. Client programs upload documents (PDF, Word, Excel, PowerPoint, plain text, and other formats with extractable text), and the service indexes them for semantic and keyword retrieval. It answers questions grounded in the stored documents with citations, summarizes documents, and finds similar documents. It also includes built-in tooling to compare and evaluate retrieval strategies.
+KnowledgeDrop is a REST API that works like a drop box for knowledge. The proposed service lets client programs upload documents (PDF, text, images), indexes them for semantic and keyword retrieval, answers questions with citations, summarizes documents, and finds similar documents. It also includes proposed tooling to compare and evaluate retrieval strategies. The first iteration implements the subset described below.
+
+## AI Disclosure
+
+#### Models used
+- Codex (OpenAI)
+- Claude (Anthropic)
+
+### Token usage
+- Estimated token usage: 40m per person (monthly plan)
+
+#### AI contributions
+Our team used various AI models throughout development to assist with creating the initial project structure, implementing features, debugging code, reviewing changes, generating and refining tests, and improving code readability. AI also supported documentation, including API descriptions, architecture and database diagrams, README updates, setup instructions, and explanations of implemented functionality and known limitations.
+Prompts generally involved translating requirements into code, explaining implementation choices, investigating errors, suggesting fixes, identifying edge cases, generating tests, and revising documentation to match the project’s behavior. Specific prompt histories and token usage totals were not recorded in this disclosure.
+
+## Project Management
+
+[Jira task log — KnowledgeDrop](https://ishancolumbiacs.atlassian.net/jira/software/projects/KD/list?jql=project%20%3D%20KD%20ORDER%20BY%20cf%5B10019%5D%20ASC)
+
+We organize development in Jira around the six initiatives listed below. The counts include tasks and stories from the October 25, 2026 issue snapshot; they describe planned work, not release completion.
+
+| Epic | Related tasks/stories | Initiative |
+|---|---:|---|
+| **Project Setup (D-2)** | 3 | Establish quality gates, configuration management for secrets and providers, and GitHub Actions CI. |
+| **Document Management (KD-11)** | 5 | Build document creation, reading, listing, deletion, and the supporting metadata model. |
+| **RAG/Retrieval (KD-14)** | 11 | Develop ingestion, keyword and vector search, hybrid ranking, retrieval orchestration, and embedding/LLM integrations. |
+| **Evaluation (KD-24)** | 4 | Compare retrieval strategies using recall@k and MRR, labeled questions, sample documents, and a results write-up. |
+| **Client Management (KD-33)** | 2 | Implement client registration and client deletion. |
+| **Miscellaneous (KD-40)** | 1 | Add application logging. |
+
+One additional task covers selecting embedding/LLM providers (KD-8), bringing the total to **27 tasks/stories across the listed initiatives and standalone work**. Individual assignments and progress are tracked in the linked Jira task log.
+
+## First Iteration MVP
+
+This iteration focuses on authenticated file storage and document metadata management. Retrieval and AI features are deferred; the architecture and broader API reference describe the intended service, while this section and the implementation-status table identify what is available now.
+
+### Implemented scope
+
+All paths below are relative to `/knowledgeDrop`.
+
+| Endpoint | Available behavior |
+|---|---|
+| `POST /client/register` | Registers a client and returns its ID and bearer token. |
+| `DELETE /client/delete` | Soft-deletes the authenticated client and its document records; subsequent requests with that token return HTTP 401. Files and Elasticsearch data are retained. |
+| `POST /document/create` | For a new filename, stores the original file and its metadata and returns HTTP 202 with status `processing`. Text extraction and indexing are not implemented. |
+| `GET /document/read` | Returns the caller's stored original file by name, checking its content hash before streaming. Does not require ingestion to finish. |
+| `GET /document/list` | Lists the caller's non-deleted document metadata, with status filtering and pagination. |
+
+Protected endpoints require the token returned by registration. Register first, upload a file with a new name, then read or list it. Delete the client only after completing other calls with its token.
+
+### Deferred features and known limitations
+
+- **Ingestion is deferred.** The asynchronous ingestion method currently throws a not-implemented error, which is logged after a new-name upload. The file remains readable, but its record stays `processing`; it does not become `ready` or searchable.
+- **Document deletion and same-name replacement are incomplete and excluded from the demonstrated MVP.** Both call the unimplemented `deleteChunks` method and return HTTP 501 after database changes have committed. Deletion leaves the document soft-deleted; replacement overwrites the stored file and creates a new record but does not start its ingestion. Do not treat the error as evidence that no changes occurred.
+- **Question answering, similarity, comparison, evaluation, summarization, and health checks are deferred.** Their endpoint implementations currently return HTTP 501. Keyword indexing and RRF have component implementations and tests, but are not connected into a working upload-to-search API workflow.
+
+### Deployed instance
+
+The service is deployed at `http://130.211.46.32:80/knowledgeDrop`. A live demo client is already registered:
+
+- `clientId`: `6c1a72d1-989e-4040-8799-a925feee606d`
+- `clientToken`: `EXy4j2AWdaITNsDt0Ec517kkC5N8uuQrMGp76OK9mr8`
+
+These single-line commands work in Windows cmd (and in bash). Run the upload from the directory containing `test.txt`.
+
+```
+curl -i -X POST "http://130.211.46.32:80/knowledgeDrop/document/create" -H "Authorization: Bearer EXy4j2AWdaITNsDt0Ec517kkC5N8uuQrMGp76OK9mr8" -F "file=@test.txt;type=text/plain"
+curl -i "http://130.211.46.32:80/knowledgeDrop/document/list" -H "Authorization: Bearer EXy4j2AWdaITNsDt0Ec517kkC5N8uuQrMGp76OK9mr8"
+curl -i -G "http://130.211.46.32:80/knowledgeDrop/document/read" -H "Authorization: Bearer EXy4j2AWdaITNsDt0Ec517kkC5N8uuQrMGp76OK9mr8" --data-urlencode "documentName=test.txt"
+```
+
+Do not call the delete endpoints with the demo client; `client/delete` permanently invalidates its token. To try deletion, register a throwaway client and use the `clientId` and `clientToken` from the registration response:
+
+```
+curl -i -X POST "http://130.211.46.32:80/knowledgeDrop/client/register" -H "Content-Type: application/json" -d "{\"name\":\"delete-demo\"}"
+curl -i -X POST "http://130.211.46.32:80/knowledgeDrop/document/create" -H "Authorization: Bearer NEW_CLIENT_TOKEN" -F "file=@test.txt;type=text/plain"
+curl -i -X DELETE "http://130.211.46.32:80/knowledgeDrop/document/delete?documentName=test.txt" -H "Authorization: Bearer NEW_CLIENT_TOKEN"
+curl -i -X DELETE "http://130.211.46.32:80/knowledgeDrop/client/delete" -H "Authorization: Bearer NEW_CLIENT_TOKEN" -H "Content-Type: application/json" -d "{\"clientId\":\"NEW_CLIENT_ID\"}"
+curl -i "http://130.211.46.32:80/knowledgeDrop/document/list" -H "Authorization: Bearer NEW_CLIENT_TOKEN"
+```
+
+Registration returns HTTP 201 and the upload HTTP 202. Document deletion currently returns HTTP 501 because chunk removal is not implemented, but the document is still soft-deleted (see known limitations). Client deletion returns HTTP 200, and the final list returns HTTP 401 because the client has been deleted.
+
+### Demonstrating the implemented workflow
+
+Follow **Local Development** below to start the dependencies and application. These commands use a fresh client so the filename is new. Copy `clientToken` and `clientId` from the registration response into the indicated variables.
+
+```bash
+BASE=http://localhost:8080/knowledgeDrop
+curl -i -X POST "$BASE/client/register" \
+  -H 'Content-Type: application/json' -d '{"name":"iteration-one-demo"}'
+# Expected: 201, with clientId and clientToken.
+
+TOKEN='paste-clientToken-here'
+CLIENT_ID='paste-clientId-here'
+printf 'First iteration document.\n' > /tmp/knowledgedrop-demo.txt
+curl -i -X POST "$BASE/document/create" \
+  -H "Authorization: Bearer $TOKEN" \
+  -F 'file=@/tmp/knowledgedrop-demo.txt;type=text/plain'
+# Expected: 202, with documentId and status processing (ingestion is deferred).
+
+curl -i "$BASE/document/list" -H "Authorization: Bearer $TOKEN"
+# Expected: 200, with the uploaded document's metadata.
+
+curl -i -G "$BASE/document/read" -H "Authorization: Bearer $TOKEN" \
+  --data-urlencode 'documentName=knowledgedrop-demo.txt'
+# Expected: 200, with the original text as the response body.
+
+# Bad usage: protected request without a token.
+curl -i "$BASE/document/list"
+# Expected: 401.
+
+# Bad usage: read a filename that this client has not uploaded.
+curl -i -G "$BASE/document/read" -H "Authorization: Bearer $TOKEN" \
+  --data-urlencode 'documentName=missing.txt'
+# Expected: 404, with a JSON error and reason.
+
+curl -i -X DELETE "$BASE/client/delete" \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d "{\"clientId\":\"$CLIENT_ID\"}"
+# Expected: 200; client and document records are soft-deleted.
+
+curl -i "$BASE/document/list" -H "Authorization: Bearer $TOKEN"
+# Expected: 401 because the client has been deleted.
+```
+
+### Style Report
+
+We use Checkstyle with Google Java Style (`google_checks.xml`), configured in `pom.xml`, to check application and test code.
+
+Run: `./mvnw checkstyle:check`
+
+![Checkstyle: 80 files checked, zero violations](reports/style/style-report-20261025.png)
+
+[Full Checkstyle XML report](reports/style/checkstyle-result.xml)
+— zero violations.
 
 ## Why Hybrid Retrieval
 
@@ -80,18 +215,22 @@ erDiagram
         varchar doc_type "Required; MIME type, up to 127 characters"
         varchar status "Required; PROCESSING, READY, or FAILED"
         varchar failure_reason "Optional; up to 1000 characters"
-        bigint file_bytes "Content size in bytes"
-        varchar content_hash "Optional; 40-character SHA-1 hex digest"
+        bigint file_bytes "Content size in bytes; never negative"
+        varchar content_hash "40-character lowercase SHA-1 hex digest"
         timestamptz uploaded_at "Required; upload time"
         timestamptz deleted_at "Optional; null means not deleted"
+        varchar active_key UK "Derived; ownerId/name while not deleted, null once deleted; up to 320 characters"
     }
 ```
 
 - **Keys and ownership:** `PK` = primary key; `UK` = unique column. The ownership relationship is logical: `owner_id` has no declared foreign key or cascading deletion.
-- **Document names:** uniqueness per owner among non-deleted documents must be enforced by the application; there is no database unique constraint on `(owner_id, name)`.
-- **Soft deletion:** `deleted_at IS NULL` identifies non-deleted records. Queries must apply this filter explicitly; ingestion `status` is independent.
+- **Document names:** `(owner_id, name)` is unique among non-deleted documents. The database enforces this through the unique `active_key` column (constraint `uk_documents_active_owner_name`) rather than a plain unique constraint on `(owner_id, name)`, which would block re-uploading a deleted name.
+- **`active_key`:** derived by `DocumentRecord`, never set directly. It holds `ownerId/name` while `deleted_at` is null and becomes null when the document is soft-deleted. Unique constraints allow multiple nulls, so any number of deleted documents may share a name. Clearing `deleted_at` claims the name again and fails at save time if another non-deleted document already holds it.
+- **Soft deletion:** `deleted_at IS NULL` identifies non-deleted records. Queries must apply this filter explicitly; ingestion `status` is independent. `DocumentRecord.setDeletedAt` keeps `active_key` in sync.
+- **Content metadata:** `file_bytes` and `content_hash` are computed by `DocumentService` at upload and validated by the `DocumentRecord` constructor (size must not be negative; hash must be 40 lowercase hex characters). `document/read` recomputes the stored file's SHA-1 and fails with HTTP 500 if it does not match `content_hash`.
+- **Status lifecycle:** a new record starts as `PROCESSING`. `markReady` and `markProcessing` clear `failure_reason`; `markFailed` stores the reason, truncated to 1000 characters.
 - **Storage:** PostgreSQL holds metadata, not file contents. Chunk text and embeddings live in Elasticsearch, keyed by document ID.
-- **Schema source:** [ClientRecord](src/main/java/dev/coms4156/knowledgedrop/model/ClientRecord.java) and [DocumentRecord](src/main/java/dev/coms4156/knowledgedrop/model/DocumentRecord.java) define the mappings. [application.yml](src/main/resources/application.yml) enables `ddl-auto: update` at startup; obsolete columns or constraints may remain in existing databases.
+- **Schema source:** [ClientRecord](src/main/java/dev/coms4156/knowledgedrop/model/ClientRecord.java) and [DocumentRecord](src/main/java/dev/coms4156/knowledgedrop/model/DocumentRecord.java) define the mappings. [application.yml](src/main/resources/application.yml) enables `ddl-auto: update` at startup; obsolete columns or constraints may remain in existing databases. Rows created before `active_key` existed have it null and are not covered by the name constraint; for local development, wipe the data volumes (see Client Registration).
 
 ## Conventions
 
@@ -109,7 +248,7 @@ erDiagram
 
 ## API Reference
 
-All paths are under `/knowledgeDrop`. Document management endpoints are grouped under the `/knowledgeDrop/document` prefix (for example `POST /knowledgeDrop/document/create`).
+All paths are under `/knowledgeDrop`. Document management endpoints are grouped under the `/knowledgeDrop/document` prefix (for example `POST /knowledgeDrop/document/create`). This reference includes intended behavior for unfinished features; consult **First Iteration MVP** above for current availability, particularly the incomplete deletion, replacement, and ingestion paths.
 
 ### Client Registration
 
@@ -151,10 +290,10 @@ Registration and health checks require no token.
 
 | Method | Endpoint | Inputs | Behavior |
 |---|---|---|---|
-| POST | `/knowledgeDrop/document/create` | Token, file (a multipart `file` part) | Uses the file's original filename as the document name and its content type (for example, `application/pdf` or `text/plain`) as the MIME type. If the client already has a non-deleted document with that name, soft-deletes it and removes its chunks and embeddings from Elasticsearch, so the old document no longer appears in search. Always creates a new document with a new document ID, stores the file, runs the ingestion pipeline, and returns the new document ID and status `processing`. Errors on a missing or blank filename, an unsupported type, empty content, or a file larger than 10 GB. |
-| GET | `/knowledgeDrop/document/read` | Token, `documentName` | Looks up the client's non-deleted document with that name. Returns the content, ID, filename, type, upload time, and status, or HTTP 404 if there is none (including if it was deleted). Returns HTTP 400 if `documentName` is missing or blank. |
-| DELETE | `/knowledgeDrop/document/delete` | Token, `documentName` | Soft-deletes the client's non-deleted document with that name by setting `deleted_at` on its record, and removes its Elasticsearch chunk entries and embeddings so it no longer appears in search. Returns HTTP 404 if there is none, or HTTP 400 if `documentName` is missing or blank. |
-| GET | `/knowledgeDrop/document/list` | Token, optional `status`, `limit`, `offset` | Returns the client's documents with ID, filename, type, upload time, and status. Returns an empty list if there are none. |
+| POST | `/knowledgeDrop/document/create` | Token, file (a multipart `file` part) | Uses the file's original filename as the document name and its content type (for example, `application/pdf` or `text/plain`) as the MIME type. If the client already has a non-deleted document with that name, soft-deletes it and creates the new document in the same transaction; once that commits, removes the old document's chunks and embeddings from Elasticsearch (via `IngestionService.deleteChunks`), so the old document no longer appears in search. Always creates a new document with a new document ID, saves the file to disk (overwriting any earlier file stored under the same client and name), records its SHA-1 hash and size, starts the background ingestion pipeline, and returns HTTP 202 with the new document ID and status `processing`. Returns HTTP 400 for a missing or blank filename or empty content, and HTTP 413 for a file larger than 10 GB. |
+| GET | `/knowledgeDrop/document/read` | Token, `documentName` | Looks up the client's non-deleted document with that name. Returns the stored file itself as the raw response body (a Spring `ResponseEntity<InputStreamResource>`, streamed from storage), not a JSON object. The `Content-Type` header is the document's stored MIME type and `Content-Length` is its size in bytes. Before streaming, recomputes the stored file's SHA-1 and returns HTTP 500 if it does not match the hash recorded at upload. Returns HTTP 404 (JSON error body) if there is none (including if it was deleted), or HTTP 400 if `documentName` is missing or blank. Use `document/list` to get a document's ID, type, upload time, and status. |
+| DELETE | `/knowledgeDrop/document/delete` | Token, `documentName` | Soft-deletes the client's non-deleted document with that name by setting `deleted_at` on its record, then asks `IngestionService.deleteChunks` to remove its Elasticsearch chunk entries and embeddings so it no longer appears in search. The stored file is kept, and the name can be reused by a later `create`. Returns HTTP 200 with a confirmation message, HTTP 404 if there is none, or HTTP 400 if `documentName` is missing or blank. |
+| GET | `/knowledgeDrop/document/list` | Token, optional `status`, `limit`, `offset` (query parameters) | Returns a JSON array of the client's non-deleted documents, newest upload first. Each entry has `documentId`, `filename`, `type`, `uploadTime`, and `status`. `status` filters by `processing`, `ready`, `failed`, or `all` (case-insensitive; omitted, blank, or `all` returns every status); any other value returns HTTP 400. `limit` is the page size and `offset` is the number of documents to skip. A missing, zero, or negative `limit` defaults to 1000, and a missing or negative `offset` is treated as 0. Returns an empty list if there are none. |
 
 ### Question Answering and Similarity
 
@@ -236,25 +375,34 @@ curl -s -X POST localhost:8080/knowledgeDrop/client/register \
 TOKEN=<clientToken>
 curl -s localhost:8080/knowledgeDrop/document/list -H "Authorization: Bearer $TOKEN"
 
+# list: filter by status and paginate (the 2nd page of 10 ready documents)
+curl -s -G localhost:8080/knowledgeDrop/document/list -H "Authorization: Bearer $TOKEN" \
+  --data-urlencode 'status=ready' --data-urlencode 'limit=10' --data-urlencode 'offset=10'
+# => [{"documentId":"...","filename":"policy.pdf","type":"application/pdf","uploadTime":"...","status":"ready"}]
+
 # create: a single file part; the document name is the file's name (policy.pdf)
 curl -s -X POST localhost:8080/knowledgeDrop/document/create -H "Authorization: Bearer $TOKEN" \
   -F 'file=@policy.pdf;type=application/pdf'
+
+# read: returns the file itself, so save it to disk with -o
+curl -s -G localhost:8080/knowledgeDrop/document/read -H "Authorization: Bearer $TOKEN" \
+  --data-urlencode 'documentName=policy.pdf' -o policy-downloaded.pdf
 ```
 
-`create` uses `multipart/form-data` with a binary `file` part. The document name is the file's original filename, and the MIME type is the file's content type (the filename extension is used if the client sends `application/octet-stream`). Uploading again with the same filename soft-deletes the earlier document and creates a new one with a new document ID.
+`create` uses `multipart/form-data` with a binary `file` part. The document name is the file's original filename, and the MIME type is the file's content type as sent by the client. Original files are stored at `{storageDir}/{clientId}/{fileName}` (default `./data/files`). Uploading again with the same filename soft-deletes the earlier document and creates a new one with a new document ID.
 
 ### Implementation status
 
-Endpoint logic that is not built yet is marked with a `TODO:` comment that names the endpoint (for example `TODO: create: ...`) and returns `501 Not Implemented`. The AI-dependent items are marked **DEFERRED**: the providers are chosen (see Tech Stack), but the embedding service and the Gemini client are not built yet. Find every open item with `grep -rn "TODO:" src/main`. Matching disabled tests live in `EndpointTodoTests`; move each into a real test class as you build the endpoint.
+Endpoint logic that is not built yet is marked with a `TODO:` comment that names the endpoint (for example `TODO: create: ...`) and returns `501 Not Implemented`. The AI-dependent items are marked **DEFERRED**: the providers are chosen (see Tech Stack), and the Gemini client exists, but the embedding service and the endpoints that use them are not built yet. Find every open item with `grep -rn "TODO:" src/main`. Matching disabled tests live in `EndpointTodoTests`; move each into a real test class as you build the endpoint.
 
 | Endpoint | Status | Implement in |
 |---|---|---|
-| `POST registerClient` | **Built** (reference implementation) | `ClientService.register` |
-| `POST document/create` (a same-name upload soft-deletes the old document and creates a new one) | To do | `DocumentService.create` |
-| `GET document/read` | To do | `DocumentService.read` |
-| `DELETE document/delete` | To do | `DocumentService.delete` |
-| `GET document/list` | To do | `DocumentService.list` |
-| `DELETE client/delete` | **Built** | `ClientService.delete` |
+| `POST client/register` | **Built** | `ClientService.register` |
+| `POST document/create` | **Partial**: new-name file storage and metadata creation work; ingestion is deferred. Same-name replacement changes state but returns 501 because chunk deletion is a stub | `DocumentService.create` |
+| `GET document/read` | **Built** | `DocumentService.read` |
+| `DELETE document/delete` | **Incomplete**: soft-deletes the record, then returns 501 because chunk deletion is a stub | `DocumentService.delete` |
+| `GET document/list` | **Built** | `DocumentService.list` |
+| `DELETE client/delete` | **Built** (client and document record soft-deletion; stored files and index data retained) | `ClientService.delete` |
 | `GET health` | To do | `HealthService.check` |
 | Ingestion pipeline (extract, chunk, embed, index, status) and chunk deletion | **Built** | `IngestionService` |
 | `POST ask` | **DEFERRED** (LLM + embeddings) | `AskService.ask` |
@@ -262,7 +410,8 @@ Endpoint logic that is not built yet is marked with a `TODO:` comment that names
 | `POST compare` | **DEFERRED** (embeddings) | `SearchService.compare` |
 | `POST eval` | **DEFERRED** (embeddings) | `SearchService.eval` |
 | `POST summarize` | **DEFERRED** (LLM) | `SummarizationService.summarize` |
-| Embeddings and vector store (currently stubs: dummy vectors, no-op writes, empty search), RRF | **DEFERRED** | `SentenceTransformerEmbeddingClient`, `ElasticsearchVectorStore`, `retrieval/` package |
+| Keyword index and RRF | **Built as components**, with tests; end-to-end ingestion/retrieval wiring is deferred | `ElasticsearchKeywordIndex`, `RrfMerger` |
+| Chunk embeddings and vector/hybrid retrieval | **DEFERRED** | `IngestionService`, `retrieval/` package |
 
 ### Code layout
 
@@ -313,6 +462,22 @@ Coverage is a ratchet. The minimum starts at the current baseline and is raised 
 - Spring Boot 4.1 on Java 17; package `dev.coms4156.knowledgedrop`.
 - Records (clients, documents) in PostgreSQL via JPA; `ddl-auto: update` for dev, so add Flyway (or similar) migrations before a real deployment. Original uploads go under `./data/files`.
 - 501 stubs return the normal JSON error body so the API contract is testable before the logic.
+
+## LLM client
+
+`GeminiLlmClient` calls Gemini Flash (free tier) through the Gemini REST API. Put `LLM_API_KEY` and
+`LLM_MODEL` in `.env`; the key is sent in a header and never logged. Without a key, LLM calls fail
+with HTTP 503. Provider errors, timeouts and rate limits return HTTP 502 (one retry on 429 and 503).
+
+The free tier may use prompts to improve Google products, so do not send sensitive documents
+through `ask` or `summarize`.
+
+One test calls the real API and runs only when the key is in your shell environment:
+
+```bash
+set -a; . ./.env; set +a
+./mvnw -Dtest=GeminiLlmClientLiveTest test
+```
 
 ## Team
 

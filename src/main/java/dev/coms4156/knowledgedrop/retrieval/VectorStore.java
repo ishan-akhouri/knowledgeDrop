@@ -9,8 +9,9 @@ import java.util.UUID;
  *
  * <p>Every method is scoped to one client so one client can never see another's chunks.
  *
- * <p>Implemented by {@link ElasticsearchVectorStore}, which currently returns dummy results. Its
- * {@code dense_vector} length must equal {@link EmbeddingClient#dimensions()}.
+ * <p>Implemented by {@link ElasticsearchVectorStore}. Callers index a document's vectors only
+ * once ingestion has succeeded, and delete them if it fails, so only chunks of ready documents
+ * are ever searchable.
  */
 public interface VectorStore {
 

@@ -3,9 +3,9 @@ package dev.coms4156.knowledgedrop.retrieval;
 /**
  * Sends a prompt to the chat/completion model.
  *
- * <p>DEFERRED: the LLM provider has not been chosen. Used by ask (answer from context) and
- * summarize (map and reduce steps). Keep prompt construction in the services, not here, so this
- * stays a thin, mockable wrapper.
+ * <p>Implemented by {@link GeminiLlmClient} (Gemini Flash, free tier). Used by ask (answer from
+ * context) and summarize (map and reduce steps). Keep prompt construction in the services, not
+ * here, so this stays a thin, mockable wrapper. Failures surface as {@code ApiException}.
  */
 public interface LlmClient {
 
@@ -17,8 +17,5 @@ public interface LlmClient {
    * @return the model's text answer
    */
   String complete(String systemPrompt, String userPrompt);
-
-  // TODO: llm: add a timeout and a retry policy (provider calls fail). Surface failures as an
-  //   ApiException so the controller returns a clear error instead of a stack trace.
 }
 

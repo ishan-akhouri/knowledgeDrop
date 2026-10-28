@@ -69,6 +69,15 @@ class EndpointTodoTests {
   @Disabled("TODO(delete)")
   void delete_documentNotOwnedByClient_returnsError() {}
 
+  // ---- DELETE /knowledgeDrop/clientDrop
+  @Test
+  @Disabled("TODO(clientDrop)")
+  void clientDrop_removesAllClientDataAndInvalidatesToken() {}
+
+  @Test
+  @Disabled("TODO(clientDrop)")
+  void clientDrop_tokenAndClientIdMismatch_returnsError() {}
+
   // ---- GET /knowledgeDrop/document/list
   @Test
   @Disabled("TODO(list)")

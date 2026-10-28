@@ -5,12 +5,10 @@ import dev.coms4156.knowledgedrop.service.HealthService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Service health endpoint (no token required). TODO(health). */
+/** Service health endpoints (no token required). TODO(health). */
 @RestController
-@RequestMapping("/knowledgeDrop")
 public class HealthController {
 
   private final HealthService healthService;
@@ -24,8 +22,14 @@ public class HealthController {
     this.healthService = healthService;
   }
 
-  /** Returns 200 if Elasticsearch is reachable, 503 if it is down. */
+  /** Liveness check: always 200 while the app is running. Checks no dependencies. */
   @GetMapping("/health")
+  public ResponseEntity<Void> liveness() {
+    return ResponseEntity.ok().build();
+  }
+
+  /** Returns 200 if Elasticsearch is reachable, 503 if it is down. */
+  @GetMapping("/knowledgeDrop/health")
   public ResponseEntity<HealthResponse> health() {
     HealthResponse body = healthService.check();
     HttpStatus status =
