@@ -56,6 +56,33 @@ Protected endpoints require the token returned by registration. Register first, 
 - **Document deletion and same-name replacement are incomplete and excluded from the demonstrated MVP.** Both call the unimplemented `deleteChunks` method and return HTTP 501 after database changes have committed. Deletion leaves the document soft-deleted; replacement overwrites the stored file and creates a new record but does not start its ingestion. Do not treat the error as evidence that no changes occurred.
 - **Question answering, similarity, comparison, evaluation, summarization, and health checks are deferred.** Their endpoint implementations currently return HTTP 501. Keyword indexing and RRF have component implementations and tests, but are not connected into a working upload-to-search API workflow.
 
+### Deployed instance
+
+The service is deployed at `http://130.211.46.32:80/knowledgeDrop`. A live demo client is already registered:
+
+- `clientId`: `6c1a72d1-989e-4040-8799-a925feee606d`
+- `clientToken`: `EXy4j2AWdaITNsDt0Ec517kkC5N8uuQrMGp76OK9mr8`
+
+These single-line commands work in Windows cmd (and in bash). Run the upload from the directory containing `test.txt`.
+
+```
+curl -i -X POST "http://130.211.46.32:80/knowledgeDrop/document/create" -H "Authorization: Bearer EXy4j2AWdaITNsDt0Ec517kkC5N8uuQrMGp76OK9mr8" -F "file=@test.txt;type=text/plain"
+curl -i "http://130.211.46.32:80/knowledgeDrop/document/list" -H "Authorization: Bearer EXy4j2AWdaITNsDt0Ec517kkC5N8uuQrMGp76OK9mr8"
+curl -i -G "http://130.211.46.32:80/knowledgeDrop/document/read" -H "Authorization: Bearer EXy4j2AWdaITNsDt0Ec517kkC5N8uuQrMGp76OK9mr8" --data-urlencode "documentName=test.txt"
+```
+
+Do not call the delete endpoints with the demo client; `client/delete` permanently invalidates its token. To try deletion, register a throwaway client and use the `clientId` and `clientToken` from the registration response:
+
+```
+curl -i -X POST "http://130.211.46.32:80/knowledgeDrop/client/register" -H "Content-Type: application/json" -d "{\"name\":\"delete-demo\"}"
+curl -i -X POST "http://130.211.46.32:80/knowledgeDrop/document/create" -H "Authorization: Bearer NEW_CLIENT_TOKEN" -F "file=@test.txt;type=text/plain"
+curl -i -X DELETE "http://130.211.46.32:80/knowledgeDrop/document/delete?documentName=test.txt" -H "Authorization: Bearer NEW_CLIENT_TOKEN"
+curl -i -X DELETE "http://130.211.46.32:80/knowledgeDrop/client/delete" -H "Authorization: Bearer NEW_CLIENT_TOKEN" -H "Content-Type: application/json" -d "{\"clientId\":\"NEW_CLIENT_ID\"}"
+curl -i "http://130.211.46.32:80/knowledgeDrop/document/list" -H "Authorization: Bearer NEW_CLIENT_TOKEN"
+```
+
+Registration returns HTTP 201 and the upload HTTP 202. Document deletion currently returns HTTP 501 because chunk removal is not implemented, but the document is still soft-deleted (see known limitations). Client deletion returns HTTP 200, and the final list returns HTTP 401 because the client has been deleted.
+
 ### Demonstrating the implemented workflow
 
 Follow **Local Development** below to start the dependencies and application. These commands use a fresh client so the filename is new. Copy `clientToken` and `clientId` from the registration response into the indicated variables.
