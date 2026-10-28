@@ -26,6 +26,9 @@
     <checkstyle.version>12.3.1</checkstyle.version>
     <maven-pmd.version>3.28.0</maven-pmd.version>
 
+    <!-- Text extraction -->
+    <tika.version>3.3.3</tika.version>
+
      <!--
       Quality gates, enforced. The build fails on any Checkstyle or PMD violation, and when
       line coverage drops below jacoco.line.coverage.min (0.00 - 1.00).
@@ -63,6 +66,19 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-data-elasticsearch</artifactId>
+    </dependency>
+
+    <!-- Text extraction from uploaded files: PDF, Word, Excel, PowerPoint, plain text, and more.
+         tika-core must be declared explicitly: the parser modules only depend on it as provided. -->
+    <dependency>
+      <groupId>org.apache.tika</groupId>
+      <artifactId>tika-core</artifactId>
+      <version>${tika.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.tika</groupId>
+      <artifactId>tika-parsers-standard-package</artifactId>
+      <version>${tika.version}</version>
     </dependency>
 
     <!-- Testing: JUnit 5, Mockito, AssertJ, MockMvc -->
