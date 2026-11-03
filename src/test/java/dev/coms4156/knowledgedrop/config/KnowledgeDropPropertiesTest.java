@@ -20,7 +20,7 @@ class KnowledgeDropPropertiesTest {
   void providerDefaultsApplyWhenNothingIsConfigured() {
     KnowledgeDropProperties props = bind(Map.of("knowledgedrop.storage-dir", "./data/files"));
 
-    assertThat(props.embedding().baseUrl()).isEqualTo("http://localhost:5000");
+    assertThat(props.embedding().baseUrl()).isEqualTo("http://localhost:5001");
     assertThat(props.embedding().model()).isEqualTo("all-MiniLM-L6-v2");
     assertThat(props.embedding().dimension()).isEqualTo(384);
     assertThat(props.llm().provider()).isEmpty();

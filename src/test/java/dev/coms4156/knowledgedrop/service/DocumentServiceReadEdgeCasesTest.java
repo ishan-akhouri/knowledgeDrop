@@ -163,7 +163,7 @@ class DocumentServiceReadEdgeCasesTest {
             dataDir.toString(),
             new KnowledgeDropProperties.Ingestion(800, 100),
             new KnowledgeDropProperties.Retrieval(5, 60, 50),
-            new KnowledgeDropProperties.Embedding("http://localhost:5000", "model", 384),
+            new KnowledgeDropProperties.Embedding("http://localhost:5001", "model", 384),
             new KnowledgeDropProperties.Llm("", "", ""));
     return new DocumentService(
         documentRepository, ingestionService, new FileStorage(properties), transactionManager);
