@@ -34,6 +34,15 @@ jobs:
           cache: maven
 
       # compile + unit/integration tests + JaCoCo + Checkstyle + PMD
+      - name: Start embedding service
+        run: |
+          docker compose up -d --build embedding
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:5001/health && exit 0
+            sleep 5
+          done
+          docker compose logs embedding
+          exit 1
       - name: Build and verify
         run: ./mvnw -B -ntp verify
 

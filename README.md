@@ -389,7 +389,7 @@ curl -s -G localhost:8080/knowledgeDrop/document/read -H "Authorization: Bearer 
 
 ### Implementation status
 
-Endpoint logic that is not built yet is marked with a `TODO:` comment that names the endpoint (for example `TODO: create: ...`) and returns `501 Not Implemented`. The AI-dependent items are marked **DEFERRED**: the providers are chosen (see Tech Stack), and the Gemini client exists, but the embedding service and the endpoints that use them are not built yet. Find every open item with `grep -rn "TODO:" src/main`. Matching disabled tests live in `EndpointTodoTests`; move each into a real test class as you build the endpoint.
+Endpoint logic that is not built yet is marked with a `TODO:` comment that names the endpoint (for example `TODO: create: ...`) and returns `501 Not Implemented`. The AI-dependent items are marked **DEFERRED**: the providers are chosen (see Tech Stack), and the embedding service and the Gemini client exist, but the endpoints that use them are not built yet. Find every open item with `grep -rn "TODO:" src/main`. Matching disabled tests live in `EndpointTodoTests`; move each into a real test class as you build the endpoint.
 
 | Endpoint | Status | Implement in |
 |---|---|---|
@@ -474,6 +474,23 @@ One test calls the real API and runs only when the key is in your shell environm
 set -a; . ./.env; set +a
 ./mvnw -Dtest=GeminiLlmClientLiveTest test
 ```
+
+## Embedding service
+
+Embeddings come from a local sentence-transformers service (`embedding-service/`, model
+all-MiniLM-L6-v2, 384 dimensions). `docker compose up -d` builds and starts it on
+http://localhost:5001. The first build downloads PyTorch and the model, so allow a few minutes.
+
+```bash
+curl -s localhost:5001/health
+curl -s -X POST localhost:5001/embed -H 'Content-Type: application/json' \
+  -d '{"texts": ["How do I cancel my subscription?"]}'
+```
+
+The Java side is `SentenceTransformersEmbeddingClient`. Its integration and end-to-end tests need
+this service and Elasticsearch running. Changing `EMBEDDING_MODEL` needs a matching
+`EMBEDDING_DIMENSION`, a rebuild (`docker compose up -d --build embedding`), and re-embedding every
+chunk into a fresh `kd-vectors` index.
 
 ## Team
 
