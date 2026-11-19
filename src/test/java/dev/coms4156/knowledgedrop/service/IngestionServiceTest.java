@@ -11,6 +11,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -76,6 +77,19 @@ class IngestionServiceTest {
     documentId = UUID.randomUUID();
     document = new DocumentRecord(ownerId, "notes.txt", "text/plain", 5, HASH);
     ReflectionTestUtils.setField(document, "id", documentId);
+    // by default the document is still live when ingestion records its final status
+    lenient().when(documentRepository.updateStatusIfNotDeleted(any(), any(), any())).thenReturn(1);
+  }
+
+  /** Verifies the document's final status (as held in memory) was written to the repository. */
+  private void verifyStatusWritten() {
+    verify(documentRepository)
+        .updateStatusIfNotDeleted(documentId, document.getStatus(), document.getFailureReason());
+  }
+
+  /** Stubs the final status write to find the document deleted, as if deleted mid-ingestion. */
+  private void givenDeletedBeforeStatusWrite() {
+    when(documentRepository.updateStatusIfNotDeleted(eq(documentId), any(), any())).thenReturn(0);
   }
 
   private IngestionService newService(int chunkSize, int chunkOverlap) {
@@ -165,7 +179,7 @@ class IngestionServiceTest {
 
     ingestionService.ingest(documentId);
 
-    verify(documentRepository, never()).save(any());
+    verify(documentRepository, never()).updateStatusIfNotDeleted(any(), any(), any());
     verifyNoInteractions(fileStorage, embeddings, vectorStore, keywordIndex);
   }
 
@@ -176,7 +190,7 @@ class IngestionServiceTest {
 
     ingestionService.ingest(documentId);
 
-    verify(documentRepository, never()).save(any());
+    verify(documentRepository, never()).updateStatusIfNotDeleted(any(), any(), any());
     verifyNoInteractions(fileStorage, embeddings, vectorStore, keywordIndex);
   }
 
@@ -202,7 +216,7 @@ class IngestionServiceTest {
     assertEquals(0.0, chunk.score());
 
     verify(keywordIndex).index(ownerId, documentId, chunks);
-    verify(documentRepository).save(document);
+    verifyStatusWritten();
     assertEquals(DocumentStatus.READY, document.getStatus());
     assertNull(document.getFailureReason());
   }
@@ -276,7 +290,7 @@ class IngestionServiceTest {
     order.verify(embeddings).embedAll(anyList());
     order.verify(vectorStore).index(eq(ownerId), eq(documentId), anyList(), anyList());
     order.verify(keywordIndex).index(eq(ownerId), eq(documentId), anyList());
-    order.verify(documentRepository).save(document);
+    order.verify(documentRepository).updateStatusIfNotDeleted(eq(documentId), any(), any());
   }
 
   @Test
@@ -316,7 +330,7 @@ class IngestionServiceTest {
 
     assertEquals(DocumentStatus.FAILED, document.getStatus());
     assertEquals("Could not read file: no such file", document.getFailureReason());
-    verify(documentRepository).save(document);
+    verifyStatusWritten();
     verifyNoInteractions(embeddings, vectorStore, keywordIndex);
   }
 
@@ -339,7 +353,7 @@ class IngestionServiceTest {
     assertTrue(
         document.getFailureReason().startsWith("Could not"),
         "unexpected reason: " + document.getFailureReason());
-    verify(documentRepository).save(document);
+    verifyStatusWritten();
     verifyNoInteractions(vectorStore, keywordIndex);
   }
 
@@ -370,7 +384,7 @@ class IngestionServiceTest {
 
     assertEquals(DocumentStatus.FAILED, document.getStatus());
     assertEquals("Could not create embeddings: model offline", document.getFailureReason());
-    verify(documentRepository).save(document);
+    verifyStatusWritten();
     verifyNoInteractions(vectorStore, keywordIndex);
   }
 
@@ -393,7 +407,7 @@ class IngestionServiceTest {
     verify(keywordIndex).deleteByDocument(documentId);
     assertEquals(DocumentStatus.FAILED, document.getStatus());
     assertEquals("Could not index document: es down", document.getFailureReason());
-    verify(documentRepository).save(document);
+    verifyStatusWritten();
   }
 
   @Test
@@ -409,7 +423,7 @@ class IngestionServiceTest {
     InOrder order = inOrder(vectorStore, keywordIndex, documentRepository);
     order.verify(vectorStore).deleteByDocument(documentId);
     order.verify(keywordIndex).deleteByDocument(documentId);
-    order.verify(documentRepository).save(document);
+    order.verify(documentRepository).updateStatusIfNotDeleted(eq(documentId), any(), any());
     assertEquals(DocumentStatus.FAILED, document.getStatus());
     assertEquals("Could not index document: bm25 down", document.getFailureReason());
   }
@@ -418,9 +432,8 @@ class IngestionServiceTest {
   void ingestCleansUpAndMarksFailedWhenSavingReadyStatusFails() throws IOException {
     givenDocumentWithContent("hello");
     givenEmbeddingsSucceed();
-    when(documentRepository.save(document))
-        .thenThrow(new RuntimeException("write failed"))
-        .thenReturn(document);
+    when(documentRepository.updateStatusIfNotDeleted(documentId, DocumentStatus.READY, null))
+        .thenThrow(new RuntimeException("write failed"));
 
     ingestionService.ingest(documentId);
 
@@ -428,6 +441,7 @@ class IngestionServiceTest {
     verify(keywordIndex).deleteByDocument(documentId);
     assertEquals(DocumentStatus.FAILED, document.getStatus());
     assertEquals("Could not index document: write failed", document.getFailureReason());
+    verifyStatusWritten();
   }
 
   @Test
@@ -443,7 +457,7 @@ class IngestionServiceTest {
     ingestionService.ingest(documentId);
 
     assertEquals(DocumentStatus.FAILED, document.getStatus());
-    verify(documentRepository).save(document);
+    verifyStatusWritten();
   }
 
   @Test
@@ -454,6 +468,7 @@ class IngestionServiceTest {
     ingestionService.ingest(documentId);
 
     assertEquals(1000, document.getFailureReason().length());
+    verifyStatusWritten();
   }
 
   @Test
@@ -461,11 +476,65 @@ class IngestionServiceTest {
     givenDocumentWithContent("hello");
     when(embeddings.embedAll(anyList())).thenThrow(new RuntimeException("model offline"));
     RuntimeException saveError = new RuntimeException("db down");
-    when(documentRepository.save(document)).thenThrow(saveError);
+    when(documentRepository.updateStatusIfNotDeleted(
+            eq(documentId), eq(DocumentStatus.FAILED), any()))
+        .thenThrow(saveError);
 
     RuntimeException thrown =
         assertThrows(RuntimeException.class, () -> ingestionService.ingest(documentId));
     assertSame(saveError, thrown);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Document deleted while ingestion runs
+  // ---------------------------------------------------------------------------
+
+  @Test
+  void ingestNeverSavesTheWholeRecord() throws IOException {
+    givenDocumentWithContent("hello");
+    givenEmbeddingsSucceed();
+
+    ingestionService.ingest(documentId);
+
+    // saving the record loaded at the start would overwrite a delete made since then
+    verify(documentRepository, never()).save(any());
+  }
+
+  @Test
+  void ingestRemovesItsChunksWhenDocumentDeletedDuringIngestion() throws IOException {
+    givenDocumentWithContent("hello");
+    givenEmbeddingsSucceed();
+    givenDeletedBeforeStatusWrite();
+
+    ingestionService.ingest(documentId);
+
+    InOrder order = inOrder(vectorStore, keywordIndex, documentRepository);
+    order.verify(vectorStore).index(eq(ownerId), eq(documentId), anyList(), anyList());
+    order.verify(keywordIndex).index(eq(ownerId), eq(documentId), anyList());
+    order
+        .verify(documentRepository)
+        .updateStatusIfNotDeleted(documentId, DocumentStatus.READY, null);
+    order.verify(vectorStore).deleteByDocument(documentId);
+    order.verify(keywordIndex).deleteByDocument(documentId);
+    // it is not then marked failed: there is no live record to mark
+    verify(documentRepository, never())
+        .updateStatusIfNotDeleted(eq(documentId), eq(DocumentStatus.FAILED), any());
+    verify(documentRepository, never()).save(any());
+  }
+
+  @Test
+  void ingestFailureAfterDeleteIsNotRecordedAndDoesNotThrow() throws IOException {
+    givenDocumentWithContent("hello");
+    when(embeddings.embedAll(anyList())).thenThrow(new RuntimeException("model offline"));
+    givenDeletedBeforeStatusWrite();
+
+    assertDoesNotThrow(() -> ingestionService.ingest(documentId));
+
+    verify(documentRepository)
+        .updateStatusIfNotDeleted(
+            documentId, DocumentStatus.FAILED, "Could not create embeddings: model offline");
+    verify(documentRepository, never()).save(any());
+    verifyNoInteractions(vectorStore, keywordIndex);
   }
 
   // ---------------------------------------------------------------------------
