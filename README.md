@@ -156,7 +156,7 @@ flowchart TB
 
     subgraph Ingest["Ingestion"]
         direction TB
-        X[Extract text<br/>text, PDF, OCR] --> CH[Split into chunks]
+        X[Extract text<br/>Apache Tika] --> CH[Split into chunks]
         CH --> EMB[Embed chunks]
     end
 
@@ -238,8 +238,12 @@ erDiagram
 - **Document status:** each document is `processing` (being ingested), `ready` (searchable), or `failed`. Search, `ask`, `similarity`, and `summarize` only use `ready` documents.
 - **Document names:** a document's name is the original filename of the uploaded file. `read` and `delete` identify a document by its name (the `documentName` query parameter), so names are unique per client among non-deleted documents. Soft-deleted documents are ignored by name lookups, so a deleted name can be reused by a later `create`. Uploading a file whose name matches one of the client's existing documents soft-deletes that document and stores the upload as a new document with a new document ID, which is then ingested. `create` returns HTTP 400 if the upload has no filename.
 - **Upload requirements:** an uploaded file must not be empty, must not be larger than 10 GB, and must have a non-blank filename (the filename becomes the document name). `create` rejects any upload that breaks these rules.
-- **Ingestion pipeline:** `create` extracts text (direct read for text files, text extraction for PDFs, OCR for images, keeping page numbers), splits it into chunks, embeds each chunk into the Elasticsearch vector store, and indexes each chunk's text in Elasticsearch for keyword search. Ingestion runs in the background, so `create` returns `202 Accepted` with status `processing`.
-- **Responses:** endpoints return JSON, except `document/read`, which returns the raw file bytes with the document's own content type.
+- **Ingestion pipeline:** ingestion runs in the background after `create` commits, so `create` returns `202 Accepted` with status `processing`. `IngestionService` then:
+  1. Skips the document if it was deleted in the meantime.
+  2. Extracts text with Apache Tika, which detects the format (PDF, Word, Excel, PowerPoint, plain text, and more) from the content and filename. There is no OCR, so scanned PDFs and images yield no text.
+  3. Splits the text into fixed-size character chunks (`knowledgedrop.ingestion.chunk-size`, default 800) where consecutive chunks share `chunk-overlap` characters (default 100). Chunks are cut across the whole text, so page numbers are not kept (citations report page 0).
+  4. Embeds every chunk, then writes the chunks and embeddings to the Elasticsearch vector store and the chunk text to the BM25 keyword index.
+  5. Marks the document `ready`. If any step fails (the file cannot be read or parsed, no text was found, embedding or indexing failed), it removes any chunks already written and marks the document `failed` with a `failure_reason`.
 - **Errors:** always `{"error": "Not Found", "reason": "..."}`.
 
 ## API Reference
@@ -400,7 +404,7 @@ Endpoint logic that is not built yet is marked with a `TODO:` comment that names
 | `GET document/list` | **Built** | `DocumentService.list` |
 | `DELETE client/delete` | **Built** (client and document record soft-deletion; stored files and index data retained) | `ClientService.delete` |
 | `GET health` | To do | `HealthService.check` |
-| Ingestion pipeline (extract, chunk, keyword index) | To do | `IngestionService` |
+| Ingestion pipeline (extract, chunk, embed, index, status) and chunk deletion | **Built** | `IngestionService` |
 | `POST ask` | **DEFERRED** (LLM + embeddings) | `AskService.ask` |
 | `POST similarity` | **DEFERRED** (embeddings) | `AskService.similarity` |
 | `POST compare` | **DEFERRED** (embeddings) | `SearchService.compare` |
