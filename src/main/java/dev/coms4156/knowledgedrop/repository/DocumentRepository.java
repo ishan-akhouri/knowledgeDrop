@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Persistence for {@link DocumentRecord}. Every lookup is scoped to the owning client so one client
@@ -58,6 +59,29 @@ public interface DocumentRepository extends JpaRepository<DocumentRecord, UUID> 
       @Param("ownerId") UUID ownerId,
       @Param("name") String name,
       @Param("deletedAt") Instant deletedAt);
+
+  /**
+   * Sets a document's status and failure reason, only if it is not deleted. The check and the write
+   * are one statement, so a delete that commits while ingestion runs can never be undone by it:
+   * ingestion writes only the two fields it owns, and only to a live record.
+   *
+   * <p>Runs in its own transaction because ingestion calls it from a background thread that has
+   * none.
+   *
+   * @param id ID of the document
+   * @param status the new status
+   * @param failureReason the reason to record, or null to clear it
+   * @return {@code 1} if the status was written, {@code 0} if the document is deleted or missing
+   */
+  @Transactional
+  @Modifying(clearAutomatically = true, flushAutomatically = true)
+  @Query(
+      "UPDATE DocumentRecord d SET d.status = :status, d.failureReason = :failureReason "
+          + "WHERE d.id = :id AND d.deletedAt IS NULL")
+  int updateStatusIfNotDeleted(
+      @Param("id") UUID id,
+      @Param("status") DocumentStatus status,
+      @Param("failureReason") String failureReason);
 
   /** Lists one client's non-deleted documents, one page at a time. */
   Page<DocumentRecord> findByOwnerIdAndDeletedAtIsNull(UUID ownerId, Pageable pageable);
