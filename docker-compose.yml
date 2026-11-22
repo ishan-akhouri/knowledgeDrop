@@ -4,6 +4,19 @@
 #   docker compose down       stop (data is kept in the named volumes)
 #   docker compose down -v    stop and wipe all data
 services:
+  embedding:
+    build:
+      context: ./embedding-service
+      args:
+        EMBEDDING_MODEL: ${EMBEDDING_MODEL:-all-MiniLM-L6-v2}
+    ports:
+      - "5001:5000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
   postgres:
     image: postgres:16
     container_name: kd-postgres

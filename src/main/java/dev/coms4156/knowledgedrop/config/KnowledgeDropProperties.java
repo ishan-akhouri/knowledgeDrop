@@ -52,7 +52,7 @@ public record KnowledgeDropProperties(
    * @param dimension vector length produced by the model; must match the index mapping
    */
   public record Embedding(
-      @DefaultValue("http://localhost:5000") String baseUrl,
+      @DefaultValue("http://localhost:5001") String baseUrl,
       @DefaultValue("all-MiniLM-L6-v2") String model,
       @DefaultValue("384") int dimension) {}
 
