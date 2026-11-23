@@ -13,7 +13,7 @@ class RetrievalServiceKeywordTest {
 
   private final KeywordIndex keywordIndex = mock(KeywordIndex.class);
   private final RetrievalService service =
-      new RetrievalService(null, null, keywordIndex, new RrfMerger(60));
+      new RetrievalService(null, null, keywordIndex, new RrfMerger(60), 50);
 
   @Test
   void keyword_scopesTheSearchToTheClientAndReturnsTheIndexResultsInOrder() {
