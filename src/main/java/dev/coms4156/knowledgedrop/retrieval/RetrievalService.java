@@ -1,45 +1,56 @@
 package dev.coms4156.knowledgedrop.retrieval;
 
+import dev.coms4156.knowledgedrop.config.KnowledgeDropProperties;
+import dev.coms4156.knowledgedrop.model.DocumentStatus;
+import dev.coms4156.knowledgedrop.repository.DocumentRepository;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import org.springframework.stereotype.Service;
 
 /**
  * The shared retrieval component: vector search, keyword search, and hybrid (RRF).
  *
- * <p>Ask, similarity, compare and eval all go through this class so they share one
- * retrieval path.
- *
- * <p>TODO: add {@code @Service} once VectorStore, KeywordIndex, EmbeddingClient and an
- * RrfMerger bean exist. Until then Spring must not try to build this class.
+ * <p>Shared retrieval path for ask, similarity, compare and eval. Document eligibility is checked
+ * once per nonempty candidate pool, before truncation or fusion. A finite pool can return fewer
+ * than k results when too few eligible candidates occur within that pool.
  */
-@SuppressWarnings("PMD.UnusedPrivateField")
+@Service
 public class RetrievalService {
 
   private final EmbeddingClient embeddings;
   private final VectorStore vectorStore;
   private final KeywordIndex keywordIndex;
   private final RrfMerger rrf;
+  private final DocumentRepository documents;
+  private final int candidatePool;
 
   /**
    * Creates the service.
    *
-   * <p>TODO: retrieval: build {@code RrfMerger} from knowledgedrop.retrieval.rrf-k (a @Bean in
-   * config, or construct it here from KnowledgeDropProperties).
-   *
    * @param embeddings turns query text into a vector
    * @param vectorStore Elasticsearch kNN vector search
    * @param keywordIndex Elasticsearch BM25 search
-   * @param rrf merges the two ranked lists
+   * @param documents authoritative document status records
+   * @param properties candidate pool and rank fusion settings
    */
   public RetrievalService(
       EmbeddingClient embeddings,
       VectorStore vectorStore,
       KeywordIndex keywordIndex,
-      RrfMerger rrf) {
+      DocumentRepository documents,
+      KnowledgeDropProperties properties) {
     this.embeddings = embeddings;
     this.vectorStore = vectorStore;
     this.keywordIndex = keywordIndex;
-    this.rrf = rrf;
+    this.documents = documents;
+    this.rrf = new RrfMerger(properties.retrieval().rrfK());
+    this.candidatePool = properties.retrieval().candidatePool();
+    if (candidatePool <= 0) {
+      throw new IllegalArgumentException("candidatePool must be positive");
+    }
   }
 
   /**
@@ -54,9 +65,10 @@ public class RetrievalService {
     if (k <= 0 || query == null || query.isBlank()) {
       return List.of();
     }
-    // Vector-only mode needs just the top k, so ask for k directly. Hybrid mode will use the
-    // larger candidate pool.
-    return vectorStore.search(clientId, embeddings.embed(query), k);
+    List<RankedChunk> candidates =
+        vectorStore.search(clientId, embeddings.embed(query), Math.max(k, candidatePool));
+    return readyChunks(candidates, readyDocumentIds(clientId, List.of(candidates))).stream()
+        .limit(k).toList();
   }
 
   /**
@@ -68,7 +80,12 @@ public class RetrievalService {
    * @return top k chunks by BM25 score
    */
   public List<RankedChunk> keyword(UUID clientId, String query, int k) {
-    return keywordIndex.search(clientId, query, k);
+    if (k <= 0 || query == null || query.isBlank()) {
+      return List.of();
+    }
+    List<RankedChunk> candidates = keywordIndex.search(clientId, query, Math.max(k, candidatePool));
+    return readyChunks(candidates, readyDocumentIds(clientId, List.of(candidates))).stream()
+        .limit(k).toList();
   }
 
   /**
@@ -80,14 +97,37 @@ public class RetrievalService {
    * @return top k chunks by RRF score
    */
   public List<RankedChunk> hybrid(UUID clientId, String query, int k) {
-    // TODO: retrieval: fetch the vector and keyword candidate lists (candidate-pool each), pass
-    //   both to rrf.merge(..., k).
-    throw new UnsupportedOperationException("hybrid search");
+    if (k <= 0 || query == null || query.isBlank()) {
+      return List.of();
+    }
+    int limit = Math.max(k, candidatePool);
+    List<RankedChunk> vectors = vectorStore.search(clientId, embeddings.embed(query), limit);
+    List<RankedChunk> keywords = keywordIndex.search(clientId, query, limit);
+    Set<UUID> readyIds = readyDocumentIds(clientId, List.of(vectors, keywords));
+    return rrf.merge(List.of(readyChunks(vectors, readyIds), readyChunks(keywords, readyIds)), k);
   }
 
-  // TODO: similarity: a method that runs vector search on the input text and groups chunk scores
-  //   by document (best chunk per document), for POST similarity.
-  // TODO: compare: a method returning all three modes plus the overlap summary input, for POST
-  //   compare. Keep rank and score per chunk per mode.
-}
+  // One database snapshot for the union of candidates, including both hybrid lists.
+  private Set<UUID> readyDocumentIds(UUID clientId, List<List<RankedChunk>> lists) {
+    Set<UUID> ids = lists.stream().flatMap(List::stream)
+        .map(RankedChunk::documentId).collect(Collectors.toSet());
+    if (ids.isEmpty()) {
+      return Set.of();
+    }
+    return documents.findAllByOwnerIdAndIdIn(clientId, ids).stream()
+        .filter(document -> document.getStatus() == DocumentStatus.READY
+            && document.getDeletedAt() == null)
+        .map(document -> document.getId()).collect(Collectors.toSet());
+  }
 
+  private List<RankedChunk> readyChunks(List<RankedChunk> candidates, Set<UUID> readyIds) {
+    List<RankedChunk> result = new ArrayList<>();
+    for (RankedChunk chunk : candidates) {
+      if (readyIds.contains(chunk.documentId())) {
+        result.add(new RankedChunk(chunk.chunkId(), chunk.documentId(), chunk.page(), chunk.text(),
+            result.size() + 1, chunk.score()));
+      }
+    }
+    return List.copyOf(result);
+  }
+}

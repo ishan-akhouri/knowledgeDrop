@@ -29,9 +29,9 @@ import org.springframework.stereotype.Component;
  * embedding client reports. Changing the embedding model to one with a different dimension needs a
  * new index (delete {@code kd-vectors}) and re-embedding every chunk.
  *
- * <p>Readiness works like the keyword index: ingestion indexes a document's vectors as its last
- * step and calls {@link #deleteByDocument} if ingestion fails, so a document that is processing,
- * failed, or mid-update has no searchable vectors.
+ * <p>Ingestion indexes chunks before marking the document READY and deletes them on failure.
+ * Interrupted operations can leave stale chunks here; {@link RetrievalService} checks document
+ * status in Postgres before returning search results.
  *
  * <p>Every search filters by {@code clientId} inside the kNN query, so one client can never read
  * another's chunks.
