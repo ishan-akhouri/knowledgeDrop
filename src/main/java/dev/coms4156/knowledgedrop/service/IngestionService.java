@@ -36,6 +36,11 @@ import org.springframework.stereotype.Service;
  * <p>Chunks are written to Elasticsearch only after every embedding has been computed, and removed
  * again if any write fails, so a document that ends up {@code failed} leaves no searchable chunks
  * (see {@link KeywordIndex}).
+ *
+ * <p>A document may be deleted (or replaced) at any point. If that happens before its job starts,
+ * the job finds no live record and does nothing. If it happens while the job runs, the final status
+ * write only applies to a live record ({@link DocumentRepository#updateStatusIfNotDeleted}), so the
+ * delete is never undone, and the job removes any chunks it indexed.
  */
 @Service
 public class IngestionService {
@@ -140,8 +145,17 @@ public class IngestionService {
     try {
       vectorStore.index(ownerId, documentId, chunks, vectors);
       keywordIndex.index(ownerId, documentId, chunks);
+      // Index first, then mark ready only if the document is still live. A delete that committed
+      // while this ran has already queued its own chunk cleanup, which may have run before the
+      // chunks above existed, so remove them here. A delete that commits after this update runs
+      // its cleanup after indexing finished, so either way no chunks outlive the document.
       document.markReady();
-      documentRepository.save(document);
+      if (documentRepository.updateStatusIfNotDeleted(documentId, document.getStatus(), null)
+          == 0) {
+        log.info("Document {} was deleted during ingestion; removing its chunks", documentId);
+        deleteChunks(documentId);
+        return;
+      }
       log.info("Ingested document {} ({} chunks)", documentId, chunks.size());
     } catch (RuntimeException e) {
       log.error("Ingestion could not index document {}", documentId, e);
@@ -217,11 +231,19 @@ public class IngestionService {
     return new RankedChunk(document.getId() + "-" + position, document.getId(), 0, text, 0, 0);
   }
 
-  /** Records an ingestion failure on the document; if that write fails, logs and rethrows. */
+  /**
+   * Records an ingestion failure on the document unless it was deleted meanwhile, in which case
+   * there is nothing to record. If the write fails, logs and rethrows.
+   */
   private void markFailed(DocumentRecord document, String reason) {
     try {
-      document.markFailed(reason);
-      documentRepository.save(document);
+      document.markFailed(reason); // truncates the reason to fit the column
+      if (documentRepository.updateStatusIfNotDeleted(
+              document.getId(), document.getStatus(), document.getFailureReason())
+          == 0) {
+        log.info("Document {} was deleted during ingestion; not marking it failed",
+            document.getId());
+      }
     } catch (RuntimeException e) {
       log.error("Could not mark document {} as failed", document.getId(), e);
       throw e;
