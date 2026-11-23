@@ -15,7 +15,7 @@ class RetrievalServiceVectorTest {
   private final VectorStore vectorStore = mock(VectorStore.class);
   private final FakeEmbeddingClient embeddings = new FakeEmbeddingClient();
   private final RetrievalService service =
-      new RetrievalService(embeddings, vectorStore, null, new RrfMerger(60));
+      new RetrievalService(embeddings, vectorStore, null, new RrfMerger(60), 50);
 
   @Test
   void vector_embedsTheQueryAndSearchesTheClientsChunks() {
