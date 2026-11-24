@@ -67,6 +67,7 @@ class IngestionServiceBugTest {
         .when(embeddings.embedAll(anyList()))
         .thenAnswer(
             inv -> ((List<String>) inv.getArgument(0)).stream().map(t -> new float[] {1}).toList());
+    lenient().when(documentRepository.updateStatusIfNotDeleted(any(), any(), any())).thenReturn(1);
   }
 
   private DocumentRecord givenDocument(String name, byte[] content) throws IOException {
