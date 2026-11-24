@@ -83,6 +83,14 @@ public class DocumentRecord {
   @Column(name = "active_key", length = MAX_ACTIVE_KEY_LENGTH)
   private String activeKey;
 
+  /**
+   * When the chunk cleanup job last removed this document's chunks from Elasticsearch, or null if
+   * it has not. Set only by {@code DocumentRepository#markChunksPurged}; cleared when the document
+   * is re-ingested, since that writes new chunks.
+   */
+  @Column(name = "chunks_purged_at")
+  private Instant chunksPurgedAt;
+
   /** Required by JPA. */
   protected DocumentRecord() {}
 
@@ -118,6 +126,7 @@ public class DocumentRecord {
   public void markProcessing() {
     this.status = DocumentStatus.PROCESSING;
     this.failureReason = null;
+    this.chunksPurgedAt = null;
   }
 
   /** Marks the document as searchable. */
@@ -188,6 +197,10 @@ public class DocumentRecord {
 
   public Instant getDeletedAt() {
     return deletedAt;
+  }
+
+  public Instant getChunksPurgedAt() {
+    return chunksPurgedAt;
   }
 
   /**

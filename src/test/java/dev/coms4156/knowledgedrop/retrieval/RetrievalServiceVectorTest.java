@@ -6,7 +6,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import dev.coms4156.knowledgedrop.repository.DocumentRepository;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -14,8 +16,10 @@ class RetrievalServiceVectorTest {
 
   private final VectorStore vectorStore = mock(VectorStore.class);
   private final FakeEmbeddingClient embeddings = new FakeEmbeddingClient();
+  private final DocumentRepository documents = mock(DocumentRepository.class);
   private final RetrievalService service =
-      new RetrievalService(embeddings, vectorStore, null, new RrfMerger(60), 50);
+      new RetrievalService(embeddings, vectorStore, null, documents,
+          RetrievalServiceReadinessTest.properties());
 
   @Test
   void vector_embedsTheQueryAndSearchesTheClientsChunks() {
@@ -24,13 +28,18 @@ class RetrievalServiceVectorTest {
         List.of(
             new RankedChunk("c-1", UUID.randomUUID(), 1, "closest", 1, 0.9),
             new RankedChunk("c-2", UUID.randomUUID(), 1, "next", 2, 0.4));
-    when(vectorStore.search(clientId, FakeEmbeddingClient.VECTOR, 5)).thenReturn(expected);
+    when(vectorStore.search(clientId, FakeEmbeddingClient.VECTOR, 50)).thenReturn(expected);
+
+    when(documents.findAllByOwnerIdAndIdIn(clientId,
+        Set.of(expected.get(0).documentId(), expected.get(1).documentId())))
+        .thenReturn(expected.stream().map(c -> RetrievalServiceReadinessTest.document(
+            c.documentId(), dev.coms4156.knowledgedrop.model.DocumentStatus.READY)).toList());
 
     List<RankedChunk> results = service.vector(clientId, "how do I cancel?", 5);
 
     assertThat(results).isEqualTo(expected);
     assertThat(embeddings.lastText).isEqualTo("how do I cancel?");
-    verify(vectorStore).search(clientId, FakeEmbeddingClient.VECTOR, 5);
+    verify(vectorStore).search(clientId, FakeEmbeddingClient.VECTOR, 50);
   }
 
   @Test

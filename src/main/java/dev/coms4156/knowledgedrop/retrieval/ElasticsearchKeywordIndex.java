@@ -23,10 +23,10 @@ import org.springframework.stereotype.Component;
  * Elasticsearch implementation of {@link KeywordIndex}: one document per chunk, searched with BM25
  * over the {@code text} field.
  *
- * <p>Invariant that makes "only chunks of ready documents" hold: ingestion indexes a document's
- * chunks as its last step (one bulk request, right before the status becomes READY) and calls
- * {@link #deleteByDocument} if ingestion fails. A document that is still processing, failed, or
- * mid-update therefore has no searchable chunks. Elasticsearch never sees the Postgres status.
+ * <p>Ingestion indexes chunks before marking the document READY and deletes them on failure.
+ * Interrupted operations can leave stale chunks here; {@link RetrievalService} checks document
+ * status in Postgres before returning search results, and {@link
+ * dev.coms4156.knowledgedrop.service.ChunkCleanupJob} purges them in the background.
  *
  * <p>Every query filters by {@code clientId}, so one client can never read another's chunks.
  */

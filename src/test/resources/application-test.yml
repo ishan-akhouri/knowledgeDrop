@@ -12,3 +12,6 @@ spring:
 # Keep uploaded files from tests out of ./data/files; `mvn clean` removes target/.
 knowledgedrop:
   storage-dir: ./target/test-data/files
+  # Tests call ChunkCleanupJob directly; a scheduled run would touch other tests' documents.
+  cleanup:
+    cron: "-"

@@ -3,6 +3,8 @@ package dev.coms4156.knowledgedrop.repository;
 import dev.coms4156.knowledgedrop.model.DocumentRecord;
 import dev.coms4156.knowledgedrop.model.DocumentStatus;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -15,9 +17,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Persistence for {@link DocumentRecord}. Every lookup is scoped to the owning client so one client
- * can never see another client's documents.
+ * can never see another client's documents, except the chunk cleanup queries, which are internal
+ * maintenance and never reach a client.
  */
 public interface DocumentRepository extends JpaRepository<DocumentRecord, UUID> {
+
+  /** Fetches candidate documents in one owner-scoped query for retrieval eligibility checks. */
+  List<DocumentRecord> findAllByOwnerIdAndIdIn(UUID ownerId, Collection<UUID> ids);
 
   /** Finds a document by ID, only if it belongs to the given client. */
   Optional<DocumentRecord> findByIdAndOwnerId(UUID id, UUID ownerId);
@@ -89,6 +95,56 @@ public interface DocumentRepository extends JpaRepository<DocumentRecord, UUID> 
   /** Lists one client's non-deleted documents with the given status, one page at a time. */
   Page<DocumentRecord> findByOwnerIdAndStatusAndDeletedAtIsNull(
       UUID ownerId, DocumentStatus status, Pageable pageable);
+
+  /**
+   * Lists documents whose chunks may still be in Elasticsearch although they must not be
+   * searchable: deleted or failed documents the cleanup job has not purged yet, oldest first.
+   * Spans all clients; used only by the cleanup job.
+   *
+   * @param pageable how many to return (the cleanup batch)
+   * @return documents whose chunks should be purged
+   */
+  @Query(
+      "select d from DocumentRecord d where d.chunksPurgedAt is null and (d.deletedAt is not null"
+          + " or d.status = dev.coms4156.knowledgedrop.model.DocumentStatus.FAILED)"
+          + " order by d.uploadedAt, d.id")
+  List<DocumentRecord> findWithUnpurgedChunks(Pageable pageable);
+
+  /**
+   * Records that a document's chunks were purged, unless the document became searchable again
+   * since it was selected (it is no longer deleted or failed). Updates only this column, so it
+   * cannot overwrite a concurrent status change or delete.
+   *
+   * @param id the document
+   * @param purgedAt when the chunks were removed
+   * @return 1 if recorded, 0 if the document no longer qualifies or was already purged
+   */
+  @Transactional
+  @Modifying(flushAutomatically = true, clearAutomatically = true)
+  @Query(
+      "update DocumentRecord d set d.chunksPurgedAt = :purgedAt where d.id = :id"
+          + " and d.chunksPurgedAt is null and (d.deletedAt is not null"
+          + " or d.status = dev.coms4156.knowledgedrop.model.DocumentStatus.FAILED)")
+  int markChunksPurged(@Param("id") UUID id, @Param("purgedAt") Instant purgedAt);
+
+  /**
+   * Marks non-deleted documents that have been processing since before {@code cutoff} as failed.
+   * Their ingestion was lost (for example the server restarted while it was queued or running),
+   * so they would otherwise stay processing forever. Spans all clients.
+   *
+   * @param cutoff documents uploaded before this instant are considered stuck
+   * @param reason failure reason to record
+   * @return the number of documents marked failed
+   */
+  @Transactional
+  @Modifying(flushAutomatically = true, clearAutomatically = true)
+  @Query(
+      "update DocumentRecord d"
+          + " set d.status = dev.coms4156.knowledgedrop.model.DocumentStatus.FAILED,"
+          + " d.failureReason = :reason"
+          + " where d.status = dev.coms4156.knowledgedrop.model.DocumentStatus.PROCESSING"
+          + " and d.deletedAt is null and d.uploadedAt < :cutoff")
+  int failStuckProcessing(@Param("cutoff") Instant cutoff, @Param("reason") String reason);
 
   /** Marks all owned documents deleted, including documents that were deleted earlier. */
   @Modifying(flushAutomatically = true, clearAutomatically = true)

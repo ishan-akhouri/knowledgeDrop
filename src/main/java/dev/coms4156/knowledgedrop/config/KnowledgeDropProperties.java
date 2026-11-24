@@ -37,7 +37,7 @@ public record KnowledgeDropProperties(
    *
    * @param defaultK default number of results when a request omits K
    * @param rrfK constant in the reciprocal rank fusion formula 1 / (rrfK + rank)
-   * @param candidatePool number of candidates fetched per mode before fusion
+   * @param candidatePool candidates fetched per mode before status filtering and truncation
    */
   public record Retrieval(
       @DefaultValue("5") int defaultK,
