@@ -37,6 +37,11 @@ knowledgedrop:
     default-k: 5              # default K for ask / similarity / compare / eval
     rrf-k: 60                 # RRF constant: score = sum(1 / (rrf-k + rank))
     candidate-pool: 50        # results fetched per mode before status filtering
+  # Background job that purges chunks of deleted/failed documents (see ChunkCleanupJob).
+  cleanup:
+    cron: "0 */10 * * * *"    # every 10 minutes; "-" disables the job
+    stuck-after: PT2H         # processing longer than this is marked failed; above max ingest time
+    batch-size: 100           # documents purged per run
   # Embedding service (sentence-transformers). Dimension must match the vector index mapping.
   embedding:
     base-url: ${EMBEDDING_BASE_URL:http://localhost:5001}

@@ -25,7 +25,8 @@ import org.springframework.stereotype.Component;
  *
  * <p>Ingestion indexes chunks before marking the document READY and deletes them on failure.
  * Interrupted operations can leave stale chunks here; {@link RetrievalService} checks document
- * status in Postgres before returning search results.
+ * status in Postgres before returning search results, and {@link
+ * dev.coms4156.knowledgedrop.service.ChunkCleanupJob} purges them in the background.
  *
  * <p>Every query filters by {@code clientId}, so one client can never read another's chunks.
  */
