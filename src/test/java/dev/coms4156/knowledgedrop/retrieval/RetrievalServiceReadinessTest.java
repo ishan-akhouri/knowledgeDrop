@@ -127,6 +127,34 @@ class RetrievalServiceReadinessTest {
     verifyNoMoreInteractions(documents);
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = {"keyword", "vector", "hybrid"})
+  void filteringUsesConfiguredPoolAndMergerFromExistingRetrievalFlow(String mode) {
+    UUID missing = UUID.randomUUID();
+    UUID ready = UUID.randomUUID();
+    List<RankedChunk> candidates = List.of(
+        chunk("missing", missing, 1), chunk("ready", ready, 2));
+    RetrievalService configured =
+        new RetrievalService(embeddings, vectors, keywords, documents, new RrfMerger(10), 7);
+    when(embeddings.embed("refund")).thenReturn(embedding);
+    when(keywords.search(owner, "refund", 7)).thenReturn(candidates);
+    when(vectors.search(owner, embedding, 7)).thenReturn(candidates);
+    when(documents.findAllByOwnerIdAndIdIn(owner, Set.of(missing, ready)))
+        .thenReturn(List.of(document(ready, DocumentStatus.READY)));
+
+    List<RankedChunk> result = switch (mode) {
+      case "keyword" -> configured.keyword(owner, "refund", 1);
+      case "vector" -> configured.vector(owner, "refund", 1);
+      default -> configured.hybrid(owner, "refund", 1);
+    };
+
+    assertThat(result).extracting(RankedChunk::chunkId).containsExactly("ready");
+    assertThat(result).extracting(RankedChunk::rank).containsExactly(1);
+    assertThat(result.get(0).score()).isEqualTo(mode.equals("hybrid") ? 2.0 / 11 : 5.0);
+    verify(documents).findAllByOwnerIdAndIdIn(owner, Set.of(missing, ready));
+    verifyNoMoreInteractions(documents);
+  }
+
   private List<RankedChunk> search(String mode, String query, int k) {
     return switch (mode) {
       case "keyword" -> service.keyword(owner, query, k);

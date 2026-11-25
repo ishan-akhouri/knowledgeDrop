@@ -14,9 +14,12 @@ import org.springframework.stereotype.Service;
 /**
  * The shared retrieval component: vector search, keyword search, and hybrid (RRF).
  *
- * <p>Shared retrieval path for ask, similarity, compare and eval. Document eligibility is checked
- * once per nonempty candidate pool, before truncation or fusion. A finite pool can return fewer
- * than k results when too few eligible candidates occur within that pool.
+ * <p>Ask, similarity, compare and eval all go through this class so they share one
+ * retrieval path.
+ *
+ * <p>Document eligibility is checked once per nonempty candidate pool, before truncation or
+ * fusion. A finite pool can return fewer than k results when too few eligible candidates occur
+ * within that pool.
  */
 @Service
 public class RetrievalService {
