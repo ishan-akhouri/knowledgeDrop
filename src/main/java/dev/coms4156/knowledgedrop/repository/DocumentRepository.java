@@ -3,6 +3,8 @@ package dev.coms4156.knowledgedrop.repository;
 import dev.coms4156.knowledgedrop.model.DocumentRecord;
 import dev.coms4156.knowledgedrop.model.DocumentStatus;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -18,6 +20,9 @@ import org.springframework.transaction.annotation.Transactional;
  * can never see another client's documents.
  */
 public interface DocumentRepository extends JpaRepository<DocumentRecord, UUID> {
+
+  /** Fetches candidate documents in one owner-scoped query for retrieval eligibility checks. */
+  List<DocumentRecord> findAllByOwnerIdAndIdIn(UUID ownerId, Collection<UUID> ids);
 
   /** Finds a document by ID, only if it belongs to the given client. */
   Optional<DocumentRecord> findByIdAndOwnerId(UUID id, UUID ownerId);

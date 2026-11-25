@@ -3,13 +3,19 @@ package dev.coms4156.knowledgedrop.retrieval;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import dev.coms4156.knowledgedrop.model.DocumentStatus;
+import dev.coms4156.knowledgedrop.repository.DocumentRepository;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class RetrievalServiceHybridTest {
@@ -20,10 +26,19 @@ class RetrievalServiceHybridTest {
   private final EmbeddingClient embeddings = mock(EmbeddingClient.class);
   private final VectorStore vectorStore = mock(VectorStore.class);
   private final KeywordIndex keywordIndex = mock(KeywordIndex.class);
+  private final DocumentRepository documents = mock(DocumentRepository.class);
+
+  @BeforeEach
+  void everyCandidateDocumentIsReady() {
+    when(documents.findAllByOwnerIdAndIdIn(eq(clientId), anyCollection()))
+        .thenAnswer(invocation -> invocation.<Collection<UUID>>getArgument(1).stream()
+            .map(id -> RetrievalServiceReadinessTest.document(id, DocumentStatus.READY))
+            .toList());
+  }
 
   private RetrievalService serviceWithPool(int candidatePool) {
     return new RetrievalService(
-        embeddings, vectorStore, keywordIndex, new RrfMerger(60), candidatePool);
+        embeddings, vectorStore, keywordIndex, documents, new RrfMerger(60), candidatePool);
   }
 
   private static RankedChunk chunk(String id, int rank) {
@@ -84,7 +99,7 @@ class RetrievalServiceHybridTest {
     assertThat(service.hybrid(clientId, "   ", 5)).isEmpty();
     assertThat(service.hybrid(clientId, "refund", 0)).isEmpty();
     assertThat(service.hybrid(clientId, "refund", -1)).isEmpty();
-    verifyNoInteractions(embeddings, vectorStore, keywordIndex);
+    verifyNoInteractions(embeddings, vectorStore, keywordIndex, documents);
   }
 
   @Test
