@@ -4,18 +4,29 @@ import dev.coms4156.knowledgedrop.api.dto.AskRequest;
 import dev.coms4156.knowledgedrop.api.dto.AskResponse;
 import dev.coms4156.knowledgedrop.api.dto.SimilarityRequest;
 import dev.coms4156.knowledgedrop.api.dto.SimilarityResponse;
+import dev.coms4156.knowledgedrop.config.KnowledgeDropProperties;
 import dev.coms4156.knowledgedrop.exception.ApiException;
 import dev.coms4156.knowledgedrop.model.ClientRecord;
+import dev.coms4156.knowledgedrop.retrieval.RetrievalService;
 import org.springframework.stereotype.Service;
 
-/**
- * Question answering (ask) and document similarity.
- *
- * <p>DEFERRED: both need an LLM and/or embedding provider, which has not been chosen yet. Do not
- * build until that decision is made.
- */
+/** Question answering (ask) and document similarity. */
 @Service
 public class AskService {
+
+  private final RetrievalService retrieval;
+  private final int defaultK;
+
+  /**
+   * Creates the service.
+   *
+   * @param retrieval shared retrieval orchestration
+   * @param properties default result count
+   */
+  public AskService(RetrievalService retrieval, KnowledgeDropProperties properties) {
+    this.retrieval = retrieval;
+    this.defaultK = properties.retrieval().defaultK();
+  }
 
   /**
    * Answers a question using only the caller's documents, with citations.
@@ -44,11 +55,17 @@ public class AskService {
    * @return the top K stored documents with scores and best-matching snippets
    */
   public SimilarityResponse similarity(ClientRecord client, SimilarityRequest request) {
-    // TODO: similarity: if the client has no ready documents, return an error with a reason.
-    // TODO: similarity: embed the input text and compare it with the client's stored chunk
-    //   embeddings (vector search only, no LLM).
-    // TODO: similarity: group chunk scores by document, rank documents, return the top K with the
-    //   best-matching snippet each.
-    throw ApiException.notImplemented("POST /knowledgeDrop/similarity");
+    if (request.text() == null || request.text().isBlank()) {
+      throw ApiException.badRequest("text must not be blank");
+    }
+    int k = request.k() == null ? defaultK : request.k();
+    if (k < 1) {
+      throw ApiException.badRequest("k must be greater than or equal to 1");
+    }
+    String mode = request.mode() == null ? "vector" : request.mode();
+    if (!java.util.Set.of("vector", "keyword", "hybrid").contains(mode)) {
+      throw ApiException.badRequest("mode must be one of: vector, keyword, hybrid");
+    }
+    return new SimilarityResponse(retrieval.similarity(client.getId(), request.text(), k, mode));
   }
 }

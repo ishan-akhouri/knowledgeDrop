@@ -100,15 +100,6 @@ class EndpointTodoTests {
   @Disabled("TODO(ask)")
   void ask_clientHasNoReadyDocuments_returnsError() {}
 
-  // ---- POST /knowledgeDrop/similarity
-  @Test
-  @Disabled("TODO(similarity)")
-  void similarity_ranksDocumentsByBestChunkScore() {}
-
-  @Test
-  @Disabled("TODO(similarity)")
-  void similarity_clientHasNoReadyDocuments_returnsError() {}
-
   // ---- POST /knowledgeDrop/compare
   @Test
   @Disabled("TODO(compare)")

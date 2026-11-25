@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Question answering and similarity endpoints. Both are TODO. */
+/** Question answering and similarity endpoints. Similarity defaults to vector search. */
 @RestController
 @RequestMapping("/knowledgeDrop")
 public class AskController {
@@ -38,7 +38,7 @@ public class AskController {
     return qaService.ask(client, request);
   }
 
-  /** Ranks the caller's documents by similarity to the given text. TODO(similarity). */
+  /** Ranks the caller's documents by similarity to the given text. */
   @PostMapping("/similarity")
   public SimilarityResponse similarity(
       @RequestAttribute(AuthInterceptor.CLIENT_ATTRIBUTE) ClientRecord client,

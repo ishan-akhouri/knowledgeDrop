@@ -54,7 +54,7 @@ Protected endpoints require the token returned by registration. Register first, 
 
 - **Ingestion is deferred.** The asynchronous ingestion method currently throws a not-implemented error, which is logged after a new-name upload. The file remains readable, but its record stays `processing`; it does not become `ready` or searchable.
 - **Document deletion and same-name replacement are incomplete and excluded from the demonstrated MVP.** Both call the unimplemented `deleteChunks` method and return HTTP 501 after database changes have committed. Deletion leaves the document soft-deleted; replacement overwrites the stored file and creates a new record but does not start its ingestion. Do not treat the error as evidence that no changes occurred.
-- **Question answering, similarity, comparison, evaluation, summarization, and health checks are deferred.** Their endpoint implementations currently return HTTP 501. Keyword indexing and RRF have component implementations and tests, but are not connected into a working upload-to-search API workflow.
+- **Question answering, comparison, evaluation, summarization, and health checks are deferred.** Their endpoint implementations currently return HTTP 501. Keyword indexing and RRF have component implementations and tests, but are not connected into a working upload-to-search API workflow.
 
 ### Deployed instance
 
@@ -151,7 +151,7 @@ flowchart TB
     API -->|registerClient / read / list| REC
     API -->|delete / deleteClient| Stores
     API -.->|health<br/>pings Elasticsearch| Stores
-    API -.->|ask / compare / eval<br/>similarity: vector only| Retrieval
+    API -.->|ask / compare / eval<br/>similarity: selectable mode| Retrieval
     API -->|summarize| SUM[Summarize<br/>map-reduce]
 
     subgraph Ingest["Ingestion"]
@@ -300,7 +300,49 @@ Registration and health checks require no token.
 | Method | Endpoint | Inputs | Behavior |
 |---|---|---|---|
 | POST | `/knowledgeDrop/ask` | Token, question, optional `k` (default 5) | Runs hybrid retrieval (vector plus BM25, merged with RRF) over the client's `ready` documents, passes the top `k` chunks to an LLM, and returns the answer with citations (document ID, filename, page, snippet). Says so if nothing relevant is found. |
-| POST | `/knowledgeDrop/similarity` | Token, text to compare, optional `k` (default 5) | Embeds the input, compares it with the client's stored chunk embeddings, and returns the top `k` documents with ID, filename, similarity score, and best-matching snippet. |
+| POST | `/knowledgeDrop/similarity` | Token, text to compare, optional `k` (default 5), optional `mode` (default `vector`) | Searches with vector, keyword, or hybrid retrieval, and returns the top `k` documents with ID, filename, similarity score, and best-matching snippet. |
+
+#### Similarity requests
+
+Send JSON with nonblank `text` and an optional positive integer `k`. Omitted or null `k`
+uses `knowledgedrop.retrieval.default-k` (5 by default). The optional JSON field `mode` accepts
+`vector`, `keyword`, or `hybrid` (lowercase); omitted or null means `vector`.
+For example: `{"text":"The passage to check","k":5,"mode":"hybrid"}`.
+
+```bash
+curl -s -X POST localhost:8080/knowledgeDrop/similarity \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"text":"The passage to check for similar content.","k":5}'
+```
+
+```json
+{"results":[{"documentId":"123e4567-e89b-42d3-a456-426614174000","filename":"essay.txt","score":0.92,"snippet":"The best matching stored chunk."}]}
+```
+
+The endpoint uses the selected shared retrieval method (no LLM):
+
+| Mode | Retrieval | Meaning of `score` |
+|---|---|---|
+| `vector` (default) | Embeds the input once and searches chunk vectors | Cosine similarity, -1 to 1 |
+| `keyword` | Searches chunk text; no embedding call | BM25 relevance score |
+| `hybrid` | Combines vector and keyword rankings | Reciprocal rank fusion (RRF) score |
+
+Scores from different modes are not directly comparable; use mode-specific thresholds.
+It checks document ownership, `ready` status, and absence of soft deletion against the database.
+Each document appears once, scored by its highest-scoring retrieved chunk; `snippet` is that
+chunk's full text. Results are sorted by descending score for the selected mode; ties use
+document ID. A score is a retrieval relevance measure, not a plagiarism probability or a verdict.
+
+Like the shared retrieval pipeline, this uses a finite chunk candidate pool (vector search uses
+approximate nearest neighbors): `max(k, knowledgedrop.retrieval.candidate-pool)` (pool default 50).
+The selected method returns up to this many eligible chunks (hybrid fuses both pools first).
+Grouping and eligibility filtering happen before the document limit, but fewer than `k` documents
+can be returned if that pool contains too few distinct eligible documents. Increase the pool for
+collections with many chunks per document. No matches returns HTTP 200 with `{"results":[]}`.
+Missing or invalid bearer tokens return 401. Missing, null, empty, or whitespace-only `text`,
+nonpositive `k`, unsupported `mode`, and malformed JSON return 400 with an `error` and a readable `reason`.
+Elasticsearch must be running; vector and hybrid also require the embedding service. Uploaded
+documents must finish ingestion before they can appear in results.
 
 ### Search Evaluation and Summarization
 
@@ -406,7 +448,7 @@ Endpoint logic that is not built yet is marked with a `TODO:` comment that names
 | `GET health` | To do | `HealthService.check` |
 | Ingestion pipeline (extract, chunk, embed, index, status) and chunk deletion | **Built** | `IngestionService` |
 | `POST ask` | **DEFERRED** (LLM + embeddings) | `AskService.ask` |
-| `POST similarity` | **DEFERRED** (embeddings) | `AskService.similarity` |
+| `POST similarity` | **Built** (selectable retrieval mode, best chunk per ready document) | `AskService.similarity`, `RetrievalService.similarity` |
 | `POST compare` | **DEFERRED** (embeddings) | `SearchService.compare` |
 | `POST eval` | **DEFERRED** (embeddings) | `SearchService.eval` |
 | `POST summarize` | **DEFERRED** (LLM) | `SummarizationService.summarize` |
