@@ -48,6 +48,8 @@ class AskServiceSimilarityTest {
     assertThatThrownBy(() -> service.similarity(client,
         new SimilarityRequest("text", 5, "unknown")))
         .isInstanceOf(ApiException.class).hasMessageContaining("mode must be");
+    assertThatThrownBy(() -> service.similarity(client, new SimilarityRequest("text", 10001)))
+        .isInstanceOf(ApiException.class).hasMessageContaining("k must be less than");
     verifyNoInteractions(retrieval);
   }
 }

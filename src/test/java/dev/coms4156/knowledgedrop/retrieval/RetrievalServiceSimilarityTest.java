@@ -71,6 +71,29 @@ class RetrievalServiceSimilarityTest {
     verifyNoInteractions(documents, keywords);
   }
 
+  @Test
+  void hybridGroupsTheEntireMergedPoolBeforeLimitingDocuments() {
+    UUID first = new UUID(0, 1);
+    UUID second = new UUID(0, 2);
+    RetrievalService smallPool =
+        new RetrievalService(embeddings, vectors, keywords, documents, new RrfMerger(60), 2);
+    when(embeddings.embed("text")).thenReturn(embedding);
+    when(vectors.search(owner, embedding, 2)).thenReturn(List.of(
+        chunk("a", first, 0.9), chunk("b", first, 0.8)));
+    when(keywords.search(owner, "text", 2)).thenReturn(List.of(
+        chunk("b", first, 4), chunk("c", second, 3)));
+    when(documents.findAllByOwnerIdAndIdIn(owner, Set.of(first, second)))
+        .thenReturn(List.of(ready(first), ready(second)));
+    when(documents.findAllByOwnerIdAndIdIn(owner, Set.of(first)))
+        .thenReturn(List.of(ready(first)));
+
+    List<SimilarDocument> results = smallPool.similarity(owner, "text", 2, "hybrid");
+
+    assertThat(results).extracting(SimilarDocument::documentId).containsExactly(first, second);
+    assertThat(results.get(0).snippet()).isEqualTo("b");
+    assertThat(results.get(0).score()).isEqualTo(1.0 / 61 + 1.0 / 62);
+  }
+
   private DocumentRecord ready(UUID id) {
     return RetrievalServiceReadinessTest.document(id, DocumentStatus.READY);
   }

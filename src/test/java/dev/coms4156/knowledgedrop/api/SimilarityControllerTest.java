@@ -174,6 +174,27 @@ class SimilarityControllerTest {
     verifyNoInteractions(embeddings, vectors, keywords);
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = {"vector", "keyword", "hybrid"})
+  void oversizedLimitReturns400BeforeSearching(String mode) throws Exception {
+    mvc.perform(post("/knowledgeDrop/similarity").header("Authorization", "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"text\":\"sample\",\"k\":10001,\"mode\":\"" + mode + "\"}"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.reason").value("k must be less than or equal to 10000"));
+    verifyNoInteractions(embeddings, vectors, keywords);
+  }
+
+  @Test
+  void nullModeUsesVectorSearch() throws Exception {
+    mvc.perform(post("/knowledgeDrop/similarity").header("Authorization", "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"text\":\"sample\",\"mode\":null}"))
+        .andExpect(status().isOk());
+    verify(vectors).search(eq(owner), any(), eq(50));
+    verifyNoInteractions(keywords);
+  }
+
   @Test
   void absentAuthorizationHeaderReturns401() throws Exception {
     mvc.perform(post("/knowledgeDrop/similarity")

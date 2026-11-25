@@ -145,12 +145,16 @@ public class RetrievalService {
     if (k <= 0 || query == null || query.isBlank()) {
       return List.of();
     }
-    int pool = Math.max(candidatePool, k);
+    return hybridCandidates(clientId, query, Math.max(candidatePool, k), k);
+  }
+
+  // Similarity needs the whole fused union before grouping; chunk endpoints keep their limit.
+  private List<RankedChunk> hybridCandidates(UUID clientId, String query, int pool, int limit) {
     List<RankedChunk> vectorHits = vectorStore.search(clientId, embeddings.embed(query), pool);
     List<RankedChunk> keywordHits = keywordIndex.search(clientId, query, pool);
     Set<UUID> readyIds = readyDocumentIds(clientId, List.of(vectorHits, keywordHits));
     return rrf.merge(
-        List.of(readyChunks(vectorHits, readyIds), readyChunks(keywordHits, readyIds)), k);
+        List.of(readyChunks(vectorHits, readyIds), readyChunks(keywordHits, readyIds)), limit);
   }
 
   /**
@@ -185,7 +189,7 @@ public class RetrievalService {
     List<RankedChunk> candidates = switch (mode) {
       case "vector" -> vector(clientId, text, pool);
       case "keyword" -> keyword(clientId, text, pool);
-      case "hybrid" -> hybrid(clientId, text, pool);
+      case "hybrid" -> hybridCandidates(clientId, text, pool, Integer.MAX_VALUE);
       default -> throw new IllegalArgumentException("Unknown retrieval mode: " + mode);
     };
     Set<UUID> ids = candidates.stream().map(RankedChunk::documentId).collect(Collectors.toSet());

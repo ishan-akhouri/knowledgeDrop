@@ -62,6 +62,9 @@ public class AskService {
     if (k < 1) {
       throw ApiException.badRequest("k must be greater than or equal to 1");
     }
+    if (k > 10000) {
+      throw ApiException.badRequest("k must be less than or equal to 10000");
+    }
     String mode = request.mode() == null ? "vector" : request.mode();
     if (!java.util.Set.of("vector", "keyword", "hybrid").contains(mode)) {
       throw ApiException.badRequest("mode must be one of: vector, keyword, hybrid");

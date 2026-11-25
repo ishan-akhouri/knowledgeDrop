@@ -304,7 +304,7 @@ Registration and health checks require no token.
 
 #### Similarity requests
 
-Send JSON with nonblank `text` and an optional positive integer `k`. Omitted or null `k`
+Send JSON with nonblank `text` and an optional integer `k` between 1 and 10000. Omitted or null `k`
 uses `knowledgedrop.retrieval.default-k` (5 by default). The optional JSON field `mode` accepts
 `vector`, `keyword`, or `hybrid` (lowercase); omitted or null means `vector`.
 For example: `{"text":"The passage to check","k":5,"mode":"hybrid"}`.
@@ -335,12 +335,13 @@ document ID. A score is a retrieval relevance measure, not a plagiarism probabil
 
 Like the shared retrieval pipeline, this uses a finite chunk candidate pool (vector search uses
 approximate nearest neighbors): `max(k, knowledgedrop.retrieval.candidate-pool)` (pool default 50).
-The selected method returns up to this many eligible chunks (hybrid fuses both pools first).
+Vector and keyword return up to this many eligible chunks. Hybrid groups the complete fused
+union of both pools, without truncating that union before document grouping.
 Grouping and eligibility filtering happen before the document limit, but fewer than `k` documents
 can be returned if that pool contains too few distinct eligible documents. Increase the pool for
 collections with many chunks per document. No matches returns HTTP 200 with `{"results":[]}`.
 Missing or invalid bearer tokens return 401. Missing, null, empty, or whitespace-only `text`,
-nonpositive `k`, unsupported `mode`, and malformed JSON return 400 with an `error` and a readable `reason`.
+out-of-range `k`, unsupported `mode`, and malformed JSON return 400 with an `error` and a readable `reason`.
 Elasticsearch must be running; vector and hybrid also require the embedding service. Uploaded
 documents must finish ingestion before they can appear in results.
 
