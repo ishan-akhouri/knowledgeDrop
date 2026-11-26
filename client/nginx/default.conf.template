@@ -1,0 +1,36 @@
+# Rendered by the nginx image's envsubst step at container start (only ${KD_API_URL}
+# is substituted). Serves the built SPA and proxies the two backends, so the browser
+# talks to a single origin and no CORS is needed.
+server {
+  listen 80;
+  server_name _;
+  root /usr/share/nginx/html;
+
+  # Uploads go straight through to knowledgeDrop.
+  client_max_body_size 512m;
+
+  location /knowledgeDrop/ {
+    proxy_pass ${KD_API_URL};
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_request_buffering off;
+    proxy_read_timeout 300s;
+  }
+
+  location /db/ {
+    proxy_pass http://postgrest:3000/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+  }
+
+  location /assets/ {
+    add_header Cache-Control "public, max-age=31536000, immutable";
+    try_files $uri =404;
+  }
+
+  location / {
+    add_header Cache-Control "no-cache";
+    try_files $uri /index.html;
+  }
+}
