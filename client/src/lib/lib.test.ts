@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { KdError } from '../api/knowledgeDrop';
 import type { DocumentSummary } from '../api/types';
 import { isExpired, sessionFromJwt } from '../auth/session';
-import { describeAskError } from './errors';
+import { describeAskError, describeSummaryError } from './errors';
 import { applyStatuses, uploadErrorMessage } from './uploadQueue';
 import type { UploadItem } from './uploadQueue';
 
@@ -24,6 +24,20 @@ describe('describeAskError', () => {
   });
   it('explains network failures', () => {
     expect(describeAskError(new TypeError('Failed to fetch'))).toMatch(/Could not reach/);
+  });
+});
+
+describe('describeSummaryError', () => {
+  it('explains that summaries are not implemented on 501', () => {
+    expect(describeSummaryError(new KdError(501, 'Not Implemented', ''))).toMatch(/aren't available/);
+  });
+  it('blames the LLM on 503', () => {
+    expect(describeSummaryError(new KdError(503, 'Service Unavailable', ''))).toMatch(/LLM/);
+  });
+  it('passes the reason through on 400', () => {
+    expect(describeSummaryError(new KdError(400, 'Bad Request', 'document is not ready'))).toMatch(
+      /document is not ready/,
+    );
   });
 });
 

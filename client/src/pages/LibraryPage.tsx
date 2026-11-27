@@ -5,6 +5,7 @@ import * as portalDb from '../api/portalDb';
 import type { DocumentStatus, DocumentSummary } from '../api/types';
 import { useAuth, useSession } from '../auth/AuthContext';
 import { ErrorBanner, InfoBanner, KdTokenNotice, StatusBadge } from '../components/common';
+import { SummaryPanel } from '../components/SummaryPanel';
 import { describeError } from '../lib/errors';
 import { formatShort } from '../lib/format';
 import { useDownload } from '../lib/useDownload';
@@ -15,7 +16,8 @@ const PAGE_SIZE = 25;
 export function LibraryPage() {
   const session = useSession();
   const { kdToken } = useAuth();
-  const { ownerOf, reload: reloadOwners } = useOwnerNames();
+  const { ownerOf, nameOf, reload: reloadOwners } = useOwnerNames();
+  const [selected, setSelected] = useState<DocumentSummary | null>(null);
   const { download, error: downloadError, clearError } = useDownload();
   const [status, setStatus] = useState<DocumentStatus | ''>('');
   const [offset, setOffset] = useState(0);
@@ -48,6 +50,7 @@ export function LibraryPage() {
     try {
       const { pendingCleanup } = await kd.deleteDocument(kdToken, doc.filename);
       await portalDb.markOwnerDeleted(session.jwt, doc.filename, session.analystId);
+      if (selected?.documentId === doc.documentId) setSelected(null);
       setNotice(
         pendingCleanup
           ? `Deleted “${doc.filename}”. The server reported that search-index cleanup is still pending.`
@@ -94,47 +97,68 @@ export function LibraryPage() {
       <ErrorBanner message={downloadError} onDismiss={clearError} />
       {notice && <InfoBanner>{notice}</InfoBanner>}
 
-      <div className="card table-card">
-        <table>
-          <thead>
-            <tr>
-              <th>Document</th>
-              <th className="hide-narrow">Type</th>
-              <th>Uploaded</th>
-              <th>Owner</th>
-              <th>Status</th>
-              <th aria-label="Actions" />
-            </tr>
-          </thead>
-          <tbody>
-            {docs.map((d) => (
-              <tr key={d.documentId}>
-                <td className="strong filename">{d.filename}</td>
-                <td className="muted small hide-narrow">{d.type}</td>
-                <td className="small nowrap">{formatShort(d.uploadTime)}</td>
-                <td className="small nowrap">{ownerOf(d.documentId)}</td>
-                <td>
-                  <StatusBadge status={d.status} />
-                </td>
-                <td className="row-actions">
-                  <button type="button" className="link-button" onClick={() => void download(d.filename)}>
-                    Download
-                  </button>
-                  <button type="button" className="link-button danger" onClick={() => void remove(d)}>
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {!loading && docs.length === 0 && (
+      <div className={selected ? 'library-split' : undefined}>
+        <div className="card table-card">
+          <table>
+            <thead>
               <tr>
-                <td colSpan={6} className="muted empty">
-                  {kdToken ? 'No documents match.' : 'Not connected.'}
-                </td>
+                <th>Document</th>
+                <th className="hide-narrow">Type</th>
+                <th>Uploaded</th>
+                <th>Owner</th>
+                <th>Status</th>
+                <th aria-label="Actions" />
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {docs.map((d) => (
+                <tr key={d.documentId} className={selected?.documentId === d.documentId ? 'selected' : ''}>
+                  <td className="strong filename">{d.filename}</td>
+                  <td className="muted small hide-narrow">{d.type}</td>
+                  <td className="small nowrap">{formatShort(d.uploadTime)}</td>
+                  <td className="small nowrap">{ownerOf(d.documentId)}</td>
+                  <td>
+                    <StatusBadge status={d.status} />
+                  </td>
+                  <td className="row-actions">
+                    <button
+                      type="button"
+                      className="link-button"
+                      disabled={d.status !== 'ready'}
+                      title={d.status === 'ready' ? 'View a summary' : 'Available once the document is ready'}
+                      onClick={() => setSelected(d)}
+                    >
+                      Summary
+                    </button>
+                    <button type="button" className="link-button" onClick={() => void download(d.filename)}>
+                      Download
+                    </button>
+                    <button type="button" className="link-button danger" onClick={() => void remove(d)}>
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {!loading && docs.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="muted empty">
+                    {kdToken ? 'No documents match.' : 'Not connected.'}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        {selected && (
+          <SummaryPanel
+            key={selected.documentId}
+            doc={selected}
+            ownerName={ownerOf(selected.documentId)}
+            nameOf={nameOf}
+            onClose={() => setSelected(null)}
+            onDownload={(name) => void download(name)}
+          />
+        )}
       </div>
 
       <div className="pager">

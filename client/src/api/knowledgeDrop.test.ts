@@ -37,6 +37,22 @@ describe('knowledgeDrop client', () => {
     expect(err).toMatchObject({ status: 502, error: 'Bad Gateway' });
   });
 
+  it('summarize posts the document id and length with the bearer token', async () => {
+    const fetchSpy = mockFetch(jsonResponse({ summary: 'S', documentId: 'd1', chunksUsed: 4 }));
+
+    await expect(kd.summarize('tok', 'd1', 'detailed')).resolves.toEqual({
+      summary: 'S',
+      documentId: 'd1',
+      chunksUsed: 4,
+    });
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(url).toBe('/knowledgeDrop/summarize');
+    expect(init?.method).toBe('POST');
+    expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer tok');
+    expect(JSON.parse(init?.body as string)).toEqual({ documentId: 'd1', length: 'detailed' });
+  });
+
   it('listDocuments builds the query string', async () => {
     const fetchSpy = mockFetch(jsonResponse([]));
 

@@ -8,6 +8,8 @@ import type {
   DocumentSummary,
   HealthResponse,
   RegisterClientResponse,
+  SummarizeResponse,
+  SummaryLength,
 } from './types';
 
 const BASE = '/knowledgeDrop';
@@ -57,6 +59,19 @@ export function ask(token: string, question: string, k: number): Promise<AskResp
     method: 'POST',
     headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
     body: JSON.stringify({ question, k }),
+  });
+}
+
+/** Summarizes one ready document with the service's LLM (POST /knowledgeDrop/summarize). */
+export function summarize(
+  token: string,
+  documentId: string,
+  length: SummaryLength,
+): Promise<SummarizeResponse> {
+  return requestJson<SummarizeResponse>('/summarize', {
+    method: 'POST',
+    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ documentId, length }),
   });
 }
 

@@ -33,6 +33,14 @@ export interface RegisterClientResponse {
   clientToken: string;
 }
 
+export type SummaryLength = 'short' | 'detailed';
+
+export interface SummarizeResponse {
+  summary: string;
+  documentId: string;
+  chunksUsed: number;
+}
+
 export interface HealthResponse {
   status: string;
   elasticsearch: string;
@@ -97,6 +105,15 @@ export interface DocumentOwner {
   uploaded_at: string;
   deleted_at: string | null;
   deleted_by: string | null;
+}
+
+export interface SummaryRecord {
+  document_id: string;
+  length: SummaryLength;
+  summary: string;
+  chunks_used: number;
+  created_by: string | null;
+  created_at: string;
 }
 
 export interface SettingRecord {

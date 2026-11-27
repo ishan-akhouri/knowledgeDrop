@@ -1,0 +1,10 @@
+FICTIONAL SAMPLE - Harborline Health is not a real company. For demo use only.
+
+IT BULLETIN: CLAIMS PLATFORM MAINTENANCE WINDOW
+Owner: IT Service Desk - Bulletin #2026-118
+
+Notice
+------
+The ClaimsCore adjudication platform will be unavailable Saturday, December 12, 2026 from 10:00 PM to Sunday 4:00 AM Eastern for the quarterly code-set update (new HCPCS codes and NCCI edit tables). Claim status lookups in the Member Hub will show data as of 10:00 PM Saturday during the window.
+
+Representatives: tell callers that claim status may be delayed and to call back after 6:00 AM Sunday.

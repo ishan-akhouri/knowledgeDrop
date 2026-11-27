@@ -132,6 +132,19 @@ create table if not exists insurance_portal.document_owners (
 create index if not exists document_owners_filename_idx
   on insurance_portal.document_owners (filename) where deleted_at is null;
 
+-- Shared cache of LLM summaries from POST /knowledgeDrop/summarize. Keyed by document ID,
+-- so a re-uploaded document (new ID) never shows a stale summary.
+create table if not exists insurance_portal.document_summaries (
+  document_id uuid not null,
+  length      text not null check (length in ('short', 'detailed')),
+  summary     text not null,
+  chunks_used int  not null default 0,
+  created_by  uuid default insurance_portal_private.current_analyst_id()
+              references insurance_portal.analysts (id),
+  created_at  timestamptz not null default now(),
+  primary key (document_id, length)
+);
+
 -- Name/department lookup every analyst may read (e.g. to show document owners).
 -- Runs as its owner, so it exposes only these columns of analysts and nothing else.
 create or replace view insurance_portal.analyst_directory as
@@ -347,6 +360,9 @@ grant select, insert, update, delete on insurance_portal.bookmarks to portal_use
 revoke all on insurance_portal.document_owners from portal_anon, portal_user, portal_admin;
 grant select, insert, update on insurance_portal.document_owners to portal_user, portal_admin;
 
+revoke all on insurance_portal.document_summaries from portal_anon, portal_user, portal_admin;
+grant select, insert, update on insurance_portal.document_summaries to portal_user, portal_admin;
+
 -- ---------------------------------------------------------------------------
 -- Row-level security
 -- ---------------------------------------------------------------------------
@@ -354,6 +370,7 @@ alter table insurance_portal.analysts enable row level security;
 alter table insurance_portal.questions enable row level security;
 alter table insurance_portal.bookmarks enable row level security;
 alter table insurance_portal.document_owners enable row level security;
+alter table insurance_portal.document_summaries enable row level security;
 
 drop policy if exists analysts_admin_all on insurance_portal.analysts;
 create policy analysts_admin_all on insurance_portal.analysts
@@ -425,6 +442,23 @@ create policy owners_update on insurance_portal.document_owners
   for update to portal_user, portal_admin
   using (true)
   with check (deleted_by is null or deleted_by = insurance_portal_private.current_analyst_id());
+
+-- Summaries: shared like the library, so everyone reads every row. Writes (new or
+-- regenerated) are always recorded as the caller.
+drop policy if exists summaries_read on insurance_portal.document_summaries;
+create policy summaries_read on insurance_portal.document_summaries
+  for select to portal_user, portal_admin using (true);
+
+drop policy if exists summaries_insert on insurance_portal.document_summaries;
+create policy summaries_insert on insurance_portal.document_summaries
+  for insert to portal_user, portal_admin
+  with check (created_by = insurance_portal_private.current_analyst_id());
+
+drop policy if exists summaries_update on insurance_portal.document_summaries;
+create policy summaries_update on insurance_portal.document_summaries
+  for update to portal_user, portal_admin
+  using (true)
+  with check (created_by = insurance_portal_private.current_analyst_id());
 
 -- ---------------------------------------------------------------------------
 -- Seed data

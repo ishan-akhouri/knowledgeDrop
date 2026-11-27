@@ -10,6 +10,8 @@ import type {
   NewQuestion,
   QuestionRecord,
   SettingRecord,
+  SummaryLength,
+  SummaryRecord,
 } from './types';
 
 const BASE = '/db';
@@ -214,6 +216,43 @@ export async function myBookmarkedQuestionIds(jwt: string, analystId: string): P
     { jwt },
   );
   return new Set(rows.map((r) => r.question_id));
+}
+
+// ---- document summaries (shared cache) ----
+
+/** The cached summary of a document at this length, or null if none was saved yet. */
+export async function getSummary(
+  jwt: string,
+  documentId: string,
+  length: SummaryLength,
+): Promise<SummaryRecord | null> {
+  const rows = await db<SummaryRecord[]>(
+    `/document_summaries?select=*&document_id=eq.${enc(documentId)}&length=eq.${length}`,
+    { jwt },
+  );
+  return rows[0] ?? null;
+}
+
+/**
+ * Saves (or replaces) the cached summary. `created_by` must be the caller: the database
+ * rejects anything else, and sending it lets a regenerate take over another analyst's row.
+ */
+export function saveSummary(
+  jwt: string,
+  row: {
+    document_id: string;
+    length: SummaryLength;
+    summary: string;
+    chunks_used: number;
+    created_by: string;
+  },
+): Promise<void> {
+  return db<void>('/document_summaries?on_conflict=document_id,length', {
+    method: 'POST',
+    jwt,
+    prefer: 'resolution=merge-duplicates,return=minimal',
+    body: { ...row, created_at: new Date().toISOString() },
+  });
 }
 
 // ---- document owners ----

@@ -1,0 +1,16 @@
+FICTIONAL SAMPLE - Harborline Health is not a real company. For demo use only.
+
+CALL SCRIPT: REPLACEMENT ID CARD REQUESTS
+Owner: Member Services Training
+
+Script
+------
+1. Verify the caller with three identifiers (see PRIV-04).
+
+2. Confirm the mailing address on file. If it changed, update it before ordering the card.
+
+3. Order the card in the Member Hub: Member > Cards > Request Replacement. Cards arrive in 7-10 business days.
+
+4. Offer the digital ID card in the HarborHealth mobile app, available immediately.
+
+5. If the member needs a prescription filled today, give the pharmacy BIN 610832, PCN HHRX and the group number shown in the Member Hub.

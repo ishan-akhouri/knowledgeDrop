@@ -2,6 +2,8 @@ node_modules/
 dist/
 coverage/
 *.tsbuildinfo
+.venv/
+__pycache__/
 .env
 .env.local
 *.log

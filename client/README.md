@@ -51,7 +51,22 @@ creates everyone else on the **Analyst accounts** page.
   it to call the service, so any signed-in analyst could find it in devtools. Only admins can read the
   `settings` table or see the token in the UI. Keeping it fully server-side would need a proxy that injects
   the header. That is out of scope for this demo.
+- **Summaries return 501 today.** The Library's **Summary** panel calls `POST /knowledgeDrop/summarize`,
+  which is a stub on `main`. The panel shows "Summaries aren't available on this knowledgeDrop server yet"
+  until the service implements it and an `LLM_API_KEY` is configured. Generated summaries are cached in
+  `insurance_portal.document_summaries`, so each one is created only once per length.
 - Owner tracking covers uploads made **through the portal**. Documents added another way show "Unknown".
+
+## Demo documents
+
+- `sample-docs/*.md`: five short Markdown policies (340B claims, prior-auth appeals, COB, escalation SOP,
+  denial codes).
+- `sample-docs/library/`: 20 longer documents in mixed formats (5 PDF, 5 Word, 3 PowerPoint, 3 Excel,
+  2 Markdown, 2 text). They include a provider manual chapter, the UM program description, a credentialing
+  SOP, a fee schedule, a denial-reason crosswalk, a network adequacy report, and training and QBR decks.
+  All of them are fictional.
+- To regenerate them, run `python generate.py` in `sample-docs/generate/` after
+  `pip install -r requirements.txt`. The content lives in `content.py`.
 
 ## Running it locally
 

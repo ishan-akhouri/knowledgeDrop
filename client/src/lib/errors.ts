@@ -18,6 +18,25 @@ export function describeAskError(err: unknown): string {
   return describeError(err);
 }
 
+/** Plain-language message for a failed summarize call. */
+export function describeSummaryError(err: unknown): string {
+  if (err instanceof KdError) {
+    switch (err.status) {
+      case 501:
+        return "Summaries aren't available on this knowledgeDrop server yet.";
+      case 502:
+      case 503:
+        return 'The summary service (LLM) is unavailable right now. An admin may need to configure it.';
+      case 400:
+      case 409:
+        return `This document can't be summarized: ${err.reason || err.error}`;
+      default:
+        return `knowledgeDrop returned ${err.status} ${err.error}${err.reason ? `: ${err.reason}` : ''}`;
+    }
+  }
+  return describeError(err);
+}
+
 /** Plain-language message for any other error. */
 export function describeError(err: unknown): string {
   if (err instanceof KdError) {
