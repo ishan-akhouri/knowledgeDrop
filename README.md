@@ -457,6 +457,19 @@ Checkstyle, PMD, and JaCoCo are enforced: `./mvnw verify` (and CI) fails on any 
 
 Coverage is a ratchet. The minimum starts at the current baseline and is raised as features and tests land, never lowered. The target is 85% or more by project completion. Each feature PR includes its own tests.
 
+## Retrieval Metrics
+
+`MetricsCalculator` (in `retrieval/`) scores a ranked result list against the documents labeled relevant for a question. It is a pure class with no Spring or datastore dependencies, and the `eval` endpoint will use it for every retrieval mode.
+
+| Metric | Definition |
+|---|---|
+| recall@k | relevant documents found in the top k / total relevant documents |
+| MRR | mean over questions of 1 / (rank of the first relevant result), 0 if none is found |
+
+Ranks start at 1 and follow the list exactly as given, so pass document IDs to get document-level ranks. A relevant document counts once for recall even if it appears several times. Empty results, a question with no relevant documents, and no questions at all return 0.0 instead of failing. A k larger than the list uses the whole list, and k must be positive.
+
+Example: with relevant = {A}, the results [X, Y, A] give recall@2 = 0, recall@3 = 1 and reciprocal rank 1/3.
+
 ## Design Assumptions
 
 - Spring Boot 4.1 on Java 17; package `dev.coms4156.knowledgedrop`.
