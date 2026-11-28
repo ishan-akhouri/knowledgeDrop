@@ -7,7 +7,7 @@ import java.util.UUID;
  *
  * @param documentId ID of the stored document
  * @param filename name of the stored document
- * @param score similarity score
+ * @param score cosine similarity (vector), BM25 relevance (keyword), or RRF score (hybrid)
  * @param snippet the best-matching snippet
  */
 public record SimilarDocument(UUID documentId, String filename, double score, String snippet) {}
