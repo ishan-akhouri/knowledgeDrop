@@ -1,0 +1,5 @@
+# Dev override: publishes PostgREST on the host so `npm run dev` (Vite) can proxy /db to it.
+services:
+  postgrest:
+    ports:
+      - '${POSTGREST_DEV_PORT:-3001}:3000'

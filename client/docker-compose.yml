@@ -1,0 +1,67 @@
+# Harborline Health analyst portal. Runs next to the knowledgeDrop service on the
+# same host and reuses its Postgres (started by the root docker-compose.yml).
+# Values come from client/.env (see .env.example); defaults match local dev.
+#
+#   Server mode:  docker compose up -d --build        -> UI on :${CLIENT_PORT:-3000}
+#   Dev mode:     docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db-init postgrest
+#                 (PostgREST also published on :${POSTGREST_DEV_PORT:-3001} for `npm run dev`)
+name: harborline-portal
+
+services:
+  # One-shot: applies db/init.sql (schema, roles, RLS, RPCs) to the shared Postgres.
+  db-init:
+    image: postgres:16
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    restart: 'no'
+    environment:
+      PGHOST: ${PG_HOST:-host.docker.internal}
+      PGPORT: ${PG_PORT:-5432}
+      PGDATABASE: ${PG_DB:-knowledgedrop}
+      PGUSER: ${PG_SUPERUSER:-knowledgedrop}
+      PGPASSWORD: ${PG_SUPERUSER_PASSWORD:-knowledgedrop}
+      AUTH_PASSWORD: ${PORTAL_AUTHENTICATOR_PASSWORD:-change-me-authenticator}
+      JWT_SECRET: ${PORTAL_JWT_SECRET:-change-me-to-a-long-random-string-of-32-plus-chars}
+      ADMIN_USER: ${PORTAL_ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${PORTAL_ADMIN_PASSWORD:-change-me-admin}
+    volumes:
+      - ./db/init.sql:/init.sql:ro
+    command:
+      - sh
+      - -c
+      - >-
+        until pg_isready -q; do echo "waiting for postgres at $$PGHOST:$$PGPORT"; sleep 2; done;
+        psql -v ON_ERROR_STOP=1
+        -v auth_password="$$AUTH_PASSWORD"
+        -v jwt_secret="$$JWT_SECRET"
+        -v admin_user="$$ADMIN_USER"
+        -v admin_password="$$ADMIN_PASSWORD"
+        -f /init.sql
+
+  postgrest:
+    image: postgrest/postgrest:v12.2.3
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    restart: unless-stopped
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    environment:
+      PGRST_DB_URI: postgres://portal_authenticator:${PORTAL_AUTHENTICATOR_PASSWORD:-change-me-authenticator}@${PG_HOST:-host.docker.internal}:${PG_PORT:-5432}/${PG_DB:-knowledgedrop}
+      PGRST_DB_SCHEMAS: insurance_portal
+      PGRST_DB_ANON_ROLE: portal_anon
+      PGRST_JWT_SECRET: ${PORTAL_JWT_SECRET:-change-me-to-a-long-random-string-of-32-plus-chars}
+      PGRST_DB_MAX_ROWS: '1000'
+    # Not published in server mode: only the web container reaches it.
+
+  web:
+    build: .
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    restart: unless-stopped
+    depends_on:
+      - postgrest
+    environment:
+      KD_API_URL: ${KD_API_URL:-http://host.docker.internal:8080}
+    ports:
+      - '${CLIENT_PORT:-3000}:80'

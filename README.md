@@ -320,6 +320,7 @@ Registration and health checks require no token.
 
 - **Insurance coverage lookup:** a program in a hospital's billing system that uploads plan documents and payer contracts with `create`, calls `ask` with coverage questions, and attaches the returned citations to the claim record. It uses `list` and `delete` to keep plan documents current.
 - **Essay originality checker:** a program in a school's submission system that calls `similarity` on each submitted essay and flags the submission when the top score exceeds a threshold. It then calls `create` to add the accepted essay to the collection. It never calls `ask`.
+- **Insurance analyst portal (built, in [`client/`](client/README.md)):** a React app for internal analysts and customer-service staff at a fictional insurer. It calls `ask`, `document/*` and `client/register` through a same-origin proxy. Its own data (accounts, question history, saved answers, document owners) lives in a separate `insurance_portal` schema in the same Postgres, served by PostgREST. It is isolated from the service and runs on its own port (`:3000`).
 
 ## Tech Stack
 
